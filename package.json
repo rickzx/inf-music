@@ -5,7 +5,7 @@
   "source": "src/music_player.html",
   "scripts": {
     "start": "parcel src/music_player.html  --port 8883",
-    "build": "parcel build src/music_player.html",
+    "build": "parcel build src/music_player.html --public-url /music-transformer-demo/",
     "dev": "npm-run-all --parallel watch:* serve",
     "watch:parcel": "parcel watch src/music_player.ts",
     "predeploy": "npm run build",
