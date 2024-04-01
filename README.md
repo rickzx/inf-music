@@ -1,3 +1,8 @@
+# Infinite Music Player webpage
+
+[demo](https://zihe-zhao.github.io/music-player)
+
+
 # To run the web-app locally
 
 Under this folder, run
