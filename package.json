@@ -22,10 +22,12 @@
     "parcel-namer-rewrite": "^2.10.3-rc.2",
     "parcel-reporter-static-files-copy": "^1.5.3",
     "process": "^0.11.10",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.3",
+    "url": "^0.11.3"
   },
   "dependencies": {
-    "@magenta/music": "^1.23.1"
+    "@magenta/music": "^1.23.1",
+    "@mlc-ai/web-llm": "file:../web-llm"
   },
   "staticFiles": {
     "staticPath": "src/assets"

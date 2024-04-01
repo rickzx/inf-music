@@ -2,6 +2,7 @@
 // import * as midis from './asset/*.mid';
 import * as mm from '@magenta/music/esm/core.js';
 import * as midis from 'url:./assets/*.mid';
+import * as mt from './music_transformer.ts';
 
 var log_flag = true;
 
@@ -100,6 +101,8 @@ async function main() {
             move()
         });
     }
+
+    mt.init()
 }
 
 main()
