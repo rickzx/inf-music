@@ -3,6 +3,7 @@
 import * as mm from '@magenta/music/esm/core.js';
 import * as midis from 'url:./assets/*.mid';
 import * as mt from './music_transformer.ts';
+import * as converter from './midi_converter.ts';
 
 var log_flag = true;
 
@@ -77,6 +78,7 @@ async function main() {
     const downloadButton = document.getElementById("downloadButton");
     const switchButton = document.getElementById("switchButton");
     const moveButton = document.getElementById("moveButton");
+    const convertButton = document.getElementById("convertButton");
 
     if (reloadButton) {
         reloadButton.addEventListener("click", async () => {
@@ -102,6 +104,17 @@ async function main() {
         });
     }
 
+    if (convertButton) {
+        convertButton.addEventListener("click", async () => {
+            const notesData = converter.eventsToCompound([0, 10048, 11060, 50, 10048, 11060, 
+                100, 10048, 11067, 150, 10048, 11067, 200, 10048, 11069, 250, 10048, 11069, 
+                300, 10095, 11067, 400, 10048, 11065, 450, 10048, 11065, 500, 10048, 11064, 
+                550, 10048, 11064, 600, 10048, 11062, 650, 10048, 11062, 700, 10095, 11060]);
+            console.log(notesData);
+            converter.compoundToMidi(notesData);
+        });
+    }
+    
     mt.init()
 }
 
