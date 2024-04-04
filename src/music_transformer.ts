@@ -1,5 +1,6 @@
 import * as webllm from "@mlc-ai/web-llm";
 import { MusicLogitProcessor } from "./music_logit_processor";
+import { CustomRequestParams, WorkerMessage } from "@mlc-ai/web-llm";
 
 function setLabel(id: string, text: string) {
   const label = document.getElementById(id);
@@ -12,9 +13,12 @@ function setLabel(id: string, text: string) {
 class CustomChatWorkerClient extends webllm.ChatWorkerClient {
   constructor(worker: any) {
     super(worker);
+    worker.onmessage = (event: any) => {
+      this.onmessage(event);
+    }
   }
 
-  async chunkGenerate(): Promise<void> {
+  async chunkGenerate(): Promise<string> {
     const msg: webllm.WorkerMessage = {
       kind: "customRequest",
       uuid: crypto.randomUUID(),
@@ -23,11 +27,38 @@ class CustomChatWorkerClient extends webllm.ChatWorkerClient {
         requestMessage: ""
       }
     };
+    return await this.getPromise<string>(msg);
+  }
+
+  async resetGenerator(): Promise<void> {
+    const msg: webllm.WorkerMessage = {
+      kind: "customRequest",
+      uuid: crypto.randomUUID(),
+      content: {
+        requestName: "resetGenerator",
+        requestMessage: ""
+      }
+    };
     await this.getPromise<null>(msg);
+  }
+
+  onmessage(event: MessageEvent<any>): void {
+    const msg = event.data as WorkerMessage;
+    switch (msg.kind) {
+      case "customRequest": {
+        const params = msg.content as CustomRequestParams;
+        if (params.requestName == 'generationRequestCallback') {
+          setLabel("init-label", params.requestMessage);
+        }
+        return;
+      }
+      default:
+        super.onmessage(event);
+    }
   }
 }
 
-export async function init() {
+export async function initChat() {
   const musicLogitProcessor = new MusicLogitProcessor();
   const logitProcessorRegistry = new Map<string, webllm.LogitProcessor>();
   logitProcessorRegistry.set("music-medium-800k-q0f32", musicLogitProcessor);
@@ -45,7 +76,7 @@ export async function init() {
     model_list: [
       {
         "model_url": "https://huggingface.co/mlc-ai/mlc-chat-stanford-crfm-music-medium-800k-q0f32-MLC/resolve/main/",
-        "local_id": "music-medium-800k-q0f32",
+        "model_id": "music-medium-800k-q0f32",
         "model_lib_url": "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/music-medium-800k/music-medium-800k-q0f32-webgpu.wasm",
       },
     ]
@@ -53,7 +84,6 @@ export async function init() {
 
   // Reload chat module with a logit processor
   await chat.reload("music-medium-800k-q0f32", undefined, myAppConfig);
-  await chat.chunkGenerate();
 
-  console.log(await chat.runtimeStatsText());
+  return chat;
 }

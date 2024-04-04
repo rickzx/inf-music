@@ -1,10 +1,43 @@
 body {
   background-color: #fbfcf8;
   font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+  display: flex;
+  flex-direction: row;
+  height: 100vh; /* Use the full height of the viewport */
+}
+
+.github-icon {
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding: 10px;
 }
 
 .container {
   text-align: center;
+  margin-right: 200px;
+  flex-grow: 1; /* Allows the main content to fill the available space */
+  padding: 10px; /* Add some padding around the content */
+  overflow-y: auto; /* Adds vertical scroll if content overflows */
+}
+
+.debug {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 200px; /* Adjust the width as needed */
+  overflow-y: scroll; /* Enables vertical scrolling if content overflows */
+  background-color: #f1f1f1; /* Light grey background, change as needed */
+  padding: 10px;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.5); /* Optional: adds shadow for depth */
+}
+
+.footnote {
+  text-align: left;
+  padding: 10px;
+  margin-top: 10px;
+  font-size: 14px; /* Adjust the font size as needed */
 }
 
 button {
@@ -15,7 +48,7 @@ button {
   border-radius: 5px;
   border-width: 1px;
   padding: 4px;
-  height: 30px;
+  height: 70px;
   width: 100px;
   margin-top: 10px;
   margin-left: 10px;
@@ -24,6 +57,12 @@ button {
 
 button:hover {
   background-color: #e9e6dd;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  color: #666666;
 }
 
 #midi-player {
@@ -133,14 +172,16 @@ button:hover {
   width: 200px;
 }
 
-#debug {
-  margin-top: 40px;
+.main-content {
+  flex-grow: 1; /* Allows the main content to fill the available space */
+  padding: 10px; /* Add some padding around the content */
+  overflow-y: auto; /* Adds vertical scroll if content overflows */
 }
 
-#log {
+/* #log {
   max-width: 70vw;
   margin-left: 15vw;
   margin-right: 15vw;
   display: block;
   text-align: left;
-}
+} */

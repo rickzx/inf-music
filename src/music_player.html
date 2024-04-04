@@ -6,41 +6,53 @@
     <title>Infinite Music Player</title>
     <link rel="stylesheet" href="css/musicplayer.css">
     <link rel="icon" href="assets/icon.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
     <div class="container">
-    <h1>Infinite Music Player</h1>
-    <label id="init-label"> </label>
-    <div>
-        <midi-visualizer type="piano-roll" id="midi-visualizer">
-        </midi-visualizer>
-        <midi-player id="midi-player"
-            sound-font visualizer="#midi-visualizer">
-        </midi-player>
+        <div class="github-icon">
+            <a href="https://github.com/zihe-zhao/music-player" target="_blank">
+                <i class="fab fa-github fa-3x"></i>
+            </a>
+        </div>
+        <h1>Infinite Music Player</h1>
+        <label id="init-label"> </label>
+        <br>
+        <br>
+        <div>
+            <midi-visualizer type="piano-roll" id="midi-visualizer">
+            </midi-visualizer>
+            <midi-player id="midi-player"
+                sound-font visualizer="#midi-visualizer">
+            </midi-player>
+        </div>
+
+        <div>
+            <button id="startButton">Start Generator</button>
+            <button id="pauseButton">Pause Generator</button>
+            <button id="resetButton">Reset Generator</button>
+        </div>
+
+        <div class="footnote">
+            Created by Rick Zhou, Zihe Zhao <br> 
+            2024 @ Carnegie Mellon University. <br>
+            Powered by <a href="https://github.com/mlc-ai/web-llm" target="_blank">Web-LLM</a>, <a href="https://github.com/cifkao/html-midi-player" target="_blank">htmi-midi-player</a>
+        </div>
     </div>
 
-    <div>
-        <button id="reloadButton">Reload</button>
-        <button id="downloadButton">Download</button>
-    </div>
-
-    <p>View code on <a href="https://github.com/zihe-zhao/music-player" target="_blank">GitHub</a>. Implemented with <a href="https://github.com/cifkao/html-midi-player" target="_blank">htmi-midi-player</a>.</p>
-    
-    <div id="debug">
+    <div class="debug" id="debug">
         <hr>
-        <button class="testing_button" id="switchButton">Play Tchaikovsky</button>
+        <!-- <button class="testing_button" id="switchButton">Play Tchaikovsky</button>
         <button class="testing_button" id="moveButton">Move timestamp</button>
-        <button class="testing_button" id="convertButton">Convert to Twinkle</button>
+        <button class="testing_button" id="convertButton">Convert to Twinkle</button> -->
         <p id="log">
-            We are going to get rid of the buttons later. Just putting them here to show that we could:<br>
+            <!-- We are going to get rid of the buttons later. Just putting them here to show that we could:<br>
             &nbsp 1. change the midi file that is being played. The original sound file is Greig, but click button to play Tchaikovsky.<br>
             &nbsp 2. start playing at a specified timestamp. No matter how far along we are in the music, start playing at 60 seconds.<br>
             &nbsp 3. convert raw output of Twinkle Twinkle Little Star to MIDI (see <a href="https://arxiv.org/pdf/2306.08620.pdf" target="_blank">this paper</a>). 
-            We expect these functions to come in handy later.<br><br>
+            We expect these functions to come in handy later.<br><br> -->
             Log:<br>
         </p>
-        
-    </div>
     </div>
 </body>
 </html>

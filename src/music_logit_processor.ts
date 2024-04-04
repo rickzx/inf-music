@@ -1,6 +1,6 @@
 import * as webllm from "@mlc-ai/web-llm";
-import { CONTROL_OFFSET, DUR_OFFSET, NOTE_OFFSET, SPECIAL_OFFSET, TIME_OFFSET } from "./music_transformer_vocab";
-import { MAX_DUR, MAX_NOTE, MAX_TIME } from "./music_transformer_config";
+import { CONTROL_OFFSET, DUR_OFFSET, NOTE_OFFSET, ANOTE_OFFSET, SPECIAL_OFFSET, TIME_OFFSET } from "./music_transformer_vocab";
+import { MAX_DUR, MAX_NOTE, MAX_TIME, MAX_INSTR, MAX_PITCH } from "./music_transformer_config";
 
 // Define LogitProcessor
 export class MusicLogitProcessor implements webllm.LogitProcessor {
@@ -56,6 +56,18 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
             }
         }
 
+        // `instr_logits()`
+        const instrs = getInstruments(this.tokenSequence);
+        if (Object.keys(instrs).length >= 15) {
+            for (let instr = 0; instr < MAX_INSTR; instr++) {
+                if (!(instr in instrs)) {
+                    for (var i = NOTE_OFFSET + instr * MAX_PITCH; i < NOTE_OFFSET + (instr + 1) * MAX_PITCH; i++) {
+                        logits[i] = Number.NEGATIVE_INFINITY;
+                    }
+                }
+            }
+        }
+
         return logits;
     }
 
@@ -71,4 +83,28 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
         this.tokenSequence = [];
         this.curTime = 0;
     }
+}
+
+interface InstrumentsMap {
+    [key: number]: number;
+}
+
+function getInstruments(tokens: number[]): InstrumentsMap {
+    const instruments: InstrumentsMap = {};
+    for (let i = 2; i < tokens.length; i += 3) {
+        let note = tokens[i];
+
+        if (note >= SPECIAL_OFFSET) continue;
+
+        if (note < CONTROL_OFFSET) {
+            note -= NOTE_OFFSET;
+        } else {
+            note -= ANOTE_OFFSET;
+        }
+
+        const instr = Math.floor(note / Math.pow(2, 7));
+        instruments[instr] = (instruments[instr] || 0) + 1;
+    }
+
+    return instruments;
 }
