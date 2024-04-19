@@ -84,6 +84,7 @@ function getModelId(model: string): string {
 
 async function main() {
   // Disable buttons before Web-LLM is fully loaded
+  let chat: mt.CustomChatWorkerClient;
 
   const startButton = document.getElementById("startButton") as HTMLButtonElement;
   const pauseButton = document.getElementById("pauseButton") as HTMLButtonElement;
@@ -155,14 +156,28 @@ async function main() {
   }
 
   reloadModelButton.addEventListener("click", async () => {
-    pauseButton?.click();
-    resetButton?.click();
-    await mt.initChat(model_id);
+    startButton.disabled = true;
+    pauseButton.disabled = true;
+    resetButton.disabled = true;
+    
+    generationStopped = true;
+    await chat.stopGenerator();
+    await chat.resetChat();
+    await chat.resetGenerator();
+    midi_loader.reset();
+    generating = false;
+    savedTokens = undefined;
+
+    await mt.reloadChat(chat, model_id);
+    startButton.disabled = false;
+    pauseButton.disabled = false;
+    resetButton.disabled = false;
+
     log(`Web-LLM Chat reloaded with model: ${model_id} <br>`)
   });
 
   /*************************** Init Web-LLM Chat and MIDI visualizer ********************************/
-  const chat = await mt.initChat(model_id);
+  chat = await mt.initChat(model_id);
 
   startButton.disabled = false;
   pauseButton.disabled = false;
