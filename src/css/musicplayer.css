@@ -58,6 +58,12 @@ body {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+.config-panel button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  color: #666666;
+}
+
 /* Active/Pressed Effect */
 .config-panel button:active {
   background-color: #043567;

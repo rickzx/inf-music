@@ -90,10 +90,12 @@ async function main() {
   const pauseButton = document.getElementById("pauseButton") as HTMLButtonElement;
   const resetButton = document.getElementById("resetButton") as HTMLButtonElement;
   const downloadMidiButton = document.getElementById("downloadMidiButton") as HTMLButtonElement;
+  const reloadModelButton = document.getElementById("reloadButton")! as HTMLButtonElement;
 
   startButton.disabled = true;
   pauseButton.disabled = true;
   resetButton.disabled = true;
+  reloadModelButton.disabled = true;
 
   /*************************** Managing Download ********************************/
   update_midi(midis["tchai"]);
@@ -142,16 +144,13 @@ async function main() {
   };
 
   /*************************** Model selection ********************************/
-  let selectedModel;
-  let model_id;
-  const reloadModelButton = document.getElementById("reloadButton")!;
+  let requestedModel = "small";
+  let model_id = getModelId(requestedModel);
 
   if (dropdown) {
-    selectedModel = dropdown.value;
-    model_id = getModelId(selectedModel);
+    requestedModel = dropdown.value;
     dropdown.addEventListener("change", (event) => {
-      selectedModel = (event.target as HTMLSelectElement).value;
-      model_id = getModelId(selectedModel);
+      requestedModel = (event.target as HTMLSelectElement).value;
     });
   }
 
@@ -159,6 +158,7 @@ async function main() {
     startButton.disabled = true;
     pauseButton.disabled = true;
     resetButton.disabled = true;
+    reloadModelButton.disabled = true;
     
     generationStopped = true;
     await chat.stopGenerator();
@@ -168,10 +168,12 @@ async function main() {
     generating = false;
     savedTokens = undefined;
 
+    model_id = getModelId(requestedModel);
     await mt.reloadChat(chat, model_id);
     startButton.disabled = false;
     pauseButton.disabled = false;
     resetButton.disabled = false;
+    reloadModelButton.disabled = false;
 
     log(`Web-LLM Chat reloaded with model: ${model_id} <br>`)
   });
@@ -182,6 +184,7 @@ async function main() {
   startButton.disabled = false;
   pauseButton.disabled = false;
   resetButton.disabled = false;
+  reloadModelButton.disabled = false;
 
   log(`Web-LLM Chat loaded with model: ${model_id} <br>`);
   let generating = false;
