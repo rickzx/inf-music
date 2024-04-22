@@ -1,6 +1,5 @@
 import { ChatInterface, GenerationConfig } from "@mlc-ai/web-llm";
 import { MusicLogitProcessor } from "./music_logit_processor";
-import { DUR_OFFSET } from "./music_transformer_vocab";
 
 export type GenerationProgressCallback = (
   generated: number,
