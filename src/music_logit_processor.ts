@@ -7,6 +7,7 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
     // Only stores the generated tokens, excluding the prompts (e.g. 55026, or the 510-token prompt)
     public tokenSequence: Array<number> = [];
     public curTime: number = 0;
+    public instrumentSet: number[] = [];
 
     // TODO: unsure about the performance of all these for loops
     processLogits(logits: Float32Array): Float32Array {
@@ -68,6 +69,15 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
             }
         }
 
+        if (this.instrumentSet.length > 0) {
+            for (var i = NOTE_OFFSET; i < NOTE_OFFSET + MAX_NOTE; i++) {
+                const instr = Math.floor((i - NOTE_OFFSET) / MAX_PITCH);
+                if (!this.instrumentSet.includes(instr)) {
+                    logits[i] = Number.NEGATIVE_INFINITY;
+                }
+            }
+        }
+
         return logits;
     }
 
@@ -82,6 +92,10 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
     resetState(): void {
         this.tokenSequence = [];
         this.curTime = 0;
+    }
+
+    setInstrumentSet(instrs: number[]): void {
+        this.instrumentSet = instrs;
     }
 }
 

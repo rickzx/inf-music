@@ -71,7 +71,24 @@
                 <label for="frequencyPenalty">Frequency Penalty</label>
                 <input type="range" id="frequencyPenalty" min="-2.0" max="2.0" step="0.1" value="0.0">
                 <span id="frequencyPenalty-value">0.0</span>
-        </div>
+            </div>
+            <div class="config-panel-row">
+                <label for="instruments">Instrument Selection<br> (If empty, will include all instruments)</label>
+                <form id="midiForm">
+                    <input type="checkbox" id="acousticGrandPiano" name="instruments" value="0"> Acoustic Grand Piano<br>
+                    <input type="checkbox" id="electricGuitarClean" name="instruments" value="27"> Electric Guitar (Clean)<br>
+                    <input type="checkbox" id="stringEnsemble1" name="instruments" value="48"> String Ensemble 1<br>
+                    <input type="checkbox" id="electricBassFinger" name="instruments" value="33"> Electric Bass (finger)<br>
+                    <input type="checkbox" id="violin" name="instruments" value="40"> Violin<br>
+                    <input type="checkbox" id="cello" name="instruments" value="42"> Cello<br>
+                    <input type="checkbox" id="trumpet" name="instruments" value="56"> Trumpet<br>
+                    <input type="checkbox" id="clarinet" name="instruments" value="71"> Clarinet<br>
+                    <input type="checkbox" id="flute" name="instruments" value="73"> Flute<br>
+                    <input type="checkbox" id="percussiveOrgan" name="instruments" value="17"> Percussive Organ<br>
+                    <input type="checkbox" id="drumKit" name="instruments" value="128"> Drum Kit<br>
+                    <button type="button" id="submitInstrumentsButton">Submit Instruments</button>
+                </form>
+            </div> 
     </div>
 
     <div class="debug" id="debug">

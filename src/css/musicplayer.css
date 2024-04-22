@@ -25,11 +25,12 @@ body {
   position: fixed;
   top: 0;
   right: 0;
-  bottom: 50%;
+  bottom: 30%;
   width: 180px; /* Adjust the width as needed */
   background-color: #f1f1f1; /* Light grey background, change as needed */
   padding: 10px;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5); /* Optional: adds shadow for depth */
+  overflow-y: scroll;
 }
 
 .config-panel p {
@@ -44,7 +45,7 @@ body {
   font-size: 14px;
   font-family: Arial, sans-serif;
   color: #ffffff;
-  background-color: #2b54c5;
+  background-color: #4565be;
   border: none;
   border-radius: 5px;
   cursor: pointer;
@@ -122,7 +123,7 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background-color: #2b54c5;
+  background-color: #4565be;
   border-radius: 50%;
   cursor: pointer;
   transition: background-color 0.3s ease;
@@ -131,7 +132,7 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-thumb {
   width: 15px;
   height: 15px;
-  background-color: #2b54c5;
+  background-color: #4565be;
   border-radius: 50%;
   cursor: pointer;
 }
@@ -149,7 +150,7 @@ span {
 
 .debug {
   position: fixed;
-  top: 50%;
+  top: 70%;
   right: 0;
   bottom: 0;
   width: 180px; /* Adjust the width as needed */

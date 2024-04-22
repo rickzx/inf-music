@@ -1,8 +1,18 @@
 // Serve the chat workload through web worker
-import { ChatWorkerHandler, ChatModule, LogitProcessor, WorkerMessage, CustomRequestParams, ChatInterface, GenerationConfig } from "@mlc-ai/web-llm";
+import {
+  ChatWorkerHandler,
+  ChatModule,
+  LogitProcessor,
+  WorkerMessage,
+  CustomRequestParams,
+  ChatInterface,
+  GenerationConfig,
+} from "@mlc-ai/web-llm";
 import { MusicLogitProcessor } from "./music_logit_processor";
-import { ChunkGenerator, GenerationProgressCallback } from "./music_transformer_generate";
-
+import {
+  ChunkGenerator,
+  GenerationProgressCallback,
+} from "./music_transformer_generate";
 
 const musicLogitProcessor = new MusicLogitProcessor();
 const logitProcessorRegistry = new Map<string, LogitProcessor>();
@@ -23,13 +33,17 @@ class CustomChatWorkerHandler extends ChatWorkerHandler {
         uuid: "",
         content: {
           requestName: "generationRequestCallback",
-          requestMessage: `Generated ${generated}/${total} tokens`
-        }
+          requestMessage: `Generated ${generated}/${total} tokens`,
+        },
       };
       postMessage(msg);
-    }
+    };
     this.chunkGenerator = new ChunkGenerator();
-    this.chunkIterator = this.chunkGenerator.chunkGenerate(chat, musicLogitProcessor, this.callback);
+    this.chunkIterator = this.chunkGenerator.chunkGenerate(
+      chat,
+      musicLogitProcessor,
+      this.callback
+    );
   }
 
   onmessage(event: MessageEvent<any>): void {
@@ -37,10 +51,15 @@ class CustomChatWorkerHandler extends ChatWorkerHandler {
     switch (msg.kind) {
       case "customRequest": {
         const params = msg.content as CustomRequestParams;
-        if (params.requestName == 'chunkGenerate') {
-          const genConfig = JSON.parse(params.requestMessage) as GenerationConfig;
+        if (params.requestName == "chunkGenerate") {
+          const genConfig = JSON.parse(
+            params.requestMessage
+          ) as GenerationConfig;
           this.chunkGenerator.setGenConfig(genConfig);
-          console.log("Worker: generating music-transformer tokens with config", genConfig);
+          console.log(
+            "Worker: generating music-transformer tokens with config",
+            genConfig
+          );
           this.handleTask(msg.uuid, async () => {
             const { value } = await this.chunkIterator.next();
             console.log("Worker: done generating");
@@ -50,23 +69,35 @@ class CustomChatWorkerHandler extends ChatWorkerHandler {
           console.log("Worker: reset music-transformer generator");
           this.handleTask(msg.uuid, async () => {
             this.chunkGenerator.interrupt();
-            
+
             this.chunkGenerator = new ChunkGenerator();
-            this.chunkIterator = this.chunkGenerator.chunkGenerate(chat, musicLogitProcessor, this.callback);
+            this.chunkIterator = this.chunkGenerator.chunkGenerate(
+              chat,
+              musicLogitProcessor,
+              this.callback
+            );
             musicLogitProcessor.resetState();
             chat.resetChat();
             return null;
-          })
-        } else if (params.requestName == 'interrupt') {
+          });
+        } else if (params.requestName == "interrupt") {
           console.log("Worker: pausing music-transformer generator");
           this.handleTask(msg.uuid, async () => {
             this.chunkGenerator.setPause();
             return null;
           });
-        } else if (params.requestName == 'restart') {
+        } else if (params.requestName == "restart") {
           console.log("Worker: restarting music-transformer generator");
           this.handleTask(msg.uuid, async () => {
             this.chunkGenerator.setPause(false);
+            return null;
+          });
+        } else if (params.requestName == "selectInstrument") {
+          console.log("Worker: selected instrument", params.requestMessage);
+          this.handleTask(msg.uuid, async () => {
+            musicLogitProcessor.setInstrumentSet(
+              params.requestMessage.split(",").map((str) => parseInt(str))
+            );
             return null;
           });
         }

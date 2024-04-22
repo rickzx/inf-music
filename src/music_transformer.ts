@@ -81,6 +81,18 @@ export class CustomChatWorkerClient extends webllm.ChatWorkerClient {
     await this.getPromise<null>(msg);
   }
 
+  async selectInstrument(instrument: string): Promise<void> {
+    const msg: webllm.WorkerMessage = {
+      kind: "customRequest",
+      uuid: crypto.randomUUID(),
+      content: {
+        requestName: "selectInstrument",
+        requestMessage: instrument
+      }
+    };
+    await this.getPromise<null>(msg);
+  }
+
   onmessage(event: MessageEvent<any>): void {
     const msg = event.data as WorkerMessage;
     switch (msg.kind) {

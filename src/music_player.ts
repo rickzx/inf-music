@@ -22,6 +22,12 @@ function log(msg: string) {
   }
 }
 
+function selectRandomMidi() {
+  const keys = Object.keys(midis);
+  const index = Math.floor(Math.random() * keys.length);
+  return midis[keys[index]];
+}
+
 /**
  * Download MIDI file.
  */
@@ -82,6 +88,26 @@ function getModelId(model: string): string {
   return "music-small-800k-q0f32";
 }
 
+function disableAllButtons() {
+  const buttons = document.querySelectorAll("button");
+  buttons.forEach((button) => {
+    button.disabled = true;
+  });
+}
+
+function enableAllButtons() {
+  const buttons = document.querySelectorAll("button");
+  buttons.forEach((button) => {
+    button.disabled = false;
+  });
+}
+
+function getSelectedInstruments(): number[] {
+  const checkboxes: NodeListOf<HTMLInputElement> = document.querySelectorAll<HTMLInputElement>('#midiForm input[name="instruments"]:checked');
+  const selectedInstruments: number[] = Array.from(checkboxes).map(cb => parseInt(cb.value));
+  return selectedInstruments
+}
+
 async function main() {
   // Disable buttons before Web-LLM is fully loaded
   let chat: mt.CustomChatWorkerClient;
@@ -91,14 +117,12 @@ async function main() {
   const resetButton = document.getElementById("resetButton") as HTMLButtonElement;
   const downloadMidiButton = document.getElementById("downloadMidiButton") as HTMLButtonElement;
   const reloadModelButton = document.getElementById("reloadButton")! as HTMLButtonElement;
+  const submitInstrumentButton = document.getElementById("submitInstrumentsButton") as HTMLButtonElement;
 
-  startButton.disabled = true;
-  pauseButton.disabled = true;
-  resetButton.disabled = true;
-  reloadModelButton.disabled = true;
+  disableAllButtons();
 
   /*************************** Managing Download ********************************/
-  update_midi(midis["tchai"]);
+  update_midi(selectRandomMidi());
   const midi_loader = new MIDILoader();
 
   if (downloadMidiButton) {
@@ -143,6 +167,11 @@ async function main() {
     genConfig.frequency_penalty = parseFloat((this as HTMLInputElement).value);
   };
 
+  submitInstrumentButton.addEventListener("click", async () => {
+    const selectedInstruments = getSelectedInstruments();
+    chat.selectInstrument(selectedInstruments.join(","));
+  });
+
   /*************************** Model selection ********************************/
   let requestedModel = "small";
   let model_id = getModelId(requestedModel);
@@ -155,10 +184,7 @@ async function main() {
   }
 
   reloadModelButton.addEventListener("click", async () => {
-    startButton.disabled = true;
-    pauseButton.disabled = true;
-    resetButton.disabled = true;
-    reloadModelButton.disabled = true;
+    disableAllButtons();
     
     generationStopped = true;
     await chat.stopGenerator();
@@ -170,10 +196,7 @@ async function main() {
 
     model_id = getModelId(requestedModel);
     await mt.reloadChat(chat, model_id);
-    startButton.disabled = false;
-    pauseButton.disabled = false;
-    resetButton.disabled = false;
-    reloadModelButton.disabled = false;
+    enableAllButtons();
 
     log(`Web-LLM Chat reloaded with model: ${model_id} <br>`)
   });
@@ -181,10 +204,7 @@ async function main() {
   /*************************** Init Web-LLM Chat and MIDI visualizer ********************************/
   chat = await mt.initChat(model_id);
 
-  startButton.disabled = false;
-  pauseButton.disabled = false;
-  resetButton.disabled = false;
-  reloadModelButton.disabled = false;
+  enableAllButtons();
 
   log(`Web-LLM Chat loaded with model: ${model_id} <br>`);
   let generating = false;
