@@ -168,6 +168,7 @@ async function main() {
   };
 
   submitInstrumentButton.addEventListener("click", async () => {
+    log("Selected instruments: " + getSelectedInstruments().join(",") + "<br>");
     const selectedInstruments = getSelectedInstruments();
     chat.selectInstrument(selectedInstruments.join(","));
   });

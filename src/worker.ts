@@ -95,9 +95,13 @@ class CustomChatWorkerHandler extends ChatWorkerHandler {
         } else if (params.requestName == "selectInstrument") {
           console.log("Worker: selected instrument", params.requestMessage);
           this.handleTask(msg.uuid, async () => {
-            musicLogitProcessor.setInstrumentSet(
-              params.requestMessage.split(",").map((str) => parseInt(str))
-            );
+            if (params.requestMessage.length > 0) {
+              musicLogitProcessor.setInstrumentSet(
+                params.requestMessage.split(",").map((str) => parseInt(str))
+              );
+            } else {
+              musicLogitProcessor.setInstrumentSet([]);
+            }
             return null;
           });
         }
