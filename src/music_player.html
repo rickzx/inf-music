@@ -38,15 +38,20 @@
             Created by Rick Zhou, Zihe Zhao<br>
             Advised by Professor Chris Donahue <br> 
             2024 @ Carnegie Mellon University. <br>
-            Powered by <a href="https://github.com/mlc-ai/web-llm" target="_blank">Web-LLM</a>, <a href="https://github.com/cifkao/html-midi-player" target="_blank">htmi-midi-player</a>
+            Powered by <a href="https://arxiv.org/abs/2306.08620" target="_blank">Anticipatory Music Transformer</a>, <a href="https://github.com/mlc-ai/web-llm" target="_blank">Web-LLM</a>, <a href="https://github.com/cifkao/html-midi-player" target="_blank">htmi-midi-player</a>
         </div>
     </div>
 
     <div class="config-panel" id="config-panel">
         <div class="config-panel-header">
             <h4>Configuration</h4>
-        </div>
+        </div>            
         <div class="config-panel-content">
+            <div class="config-panel-row">
+                <label for="midiFile">Upload MIDI prompt:</label>
+                <input type="file" id="midiFile" name="midiFile" accept="audio/midi, audio/x-midi">
+            </div>
+            <hr>
             <div class="dropdown-container">
                 <label for="modelSize">Choose a model size:</label>
                 <select id="modelSize">
@@ -72,13 +77,14 @@
                 <input type="range" id="frequencyPenalty" min="-2.0" max="2.0" step="0.1" value="0.0">
                 <span id="frequencyPenalty-value">0.0</span>
             </div>
+            <hr>
             <div class="config-panel-row">
                 <label for="instruments">Instrument Selection<br> (If empty, will include all instruments)</label>
                 <form id="midiForm">
                     <input type="checkbox" id="acousticGrandPiano" name="instruments" value="0"> Acoustic Grand Piano<br>
-                    <input type="checkbox" id="electricGuitarClean" name="instruments" value="27"> Electric Guitar (Clean)<br>
-                    <input type="checkbox" id="stringEnsemble1" name="instruments" value="48"> String Ensemble 1<br>
-                    <input type="checkbox" id="electricBassFinger" name="instruments" value="33"> Electric Bass (finger)<br>
+                    <input type="checkbox" id="electricGuitarClean" name="instruments" value="27"> Electric Guitar<br>
+                    <input type="checkbox" id="stringEnsemble1" name="instruments" value="48"> String Ensemble<br>
+                    <input type="checkbox" id="electricBassFinger" name="instruments" value="33"> Electric Bass<br>
                     <input type="checkbox" id="violin" name="instruments" value="40"> Violin<br>
                     <input type="checkbox" id="cello" name="instruments" value="42"> Cello<br>
                     <input type="checkbox" id="trumpet" name="instruments" value="56"> Trumpet<br>
@@ -86,7 +92,7 @@
                     <input type="checkbox" id="flute" name="instruments" value="73"> Flute<br>
                     <input type="checkbox" id="percussiveOrgan" name="instruments" value="17"> Percussive Organ<br>
                     <input type="checkbox" id="drumKit" name="instruments" value="128"> Drum Kit<br>
-                    <button type="button" id="submitInstrumentsButton">Submit Instruments</button>
+                    <button type="button" id="submitInstrumentsButton">Save Instruments</button>
                 </form>
             </div> 
     </div>

@@ -6,6 +6,7 @@ import * as mt from "./music_transformer.ts";
 import { MIDILoader } from "./midi_loader.ts";
 import { tensorflow } from "@magenta/music/esm/protobuf/proto";
 import { GenerationConfig } from "@mlc-ai/web-llm";
+import { blobToNoteSequence } from '@magenta/music';
 
 let log_flag = true;
 let current_midi_url;
@@ -171,6 +172,30 @@ async function main() {
     log("Selected instruments: " + getSelectedInstruments().join(",") + "<br>");
     const selectedInstruments = getSelectedInstruments();
     chat.selectInstrument(selectedInstruments.join(","));
+  });
+
+  /*************************** Upload MIDI ********************************/
+  window.addEventListener('DOMContentLoaded', () => {
+    const fileInput = document.getElementById('midiFile');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        log("Uploaded MIDI <br>")
+        const file = e.target.files[0];
+        current_midi_url = URL.createObjectURL(file);
+        blobToNoteSequence(file).then((seq) => {
+            var player = document.getElementById("midi-player");
+            var visualizer = document.getElementById("midi-visualizer");
+            player.noteSequence = seq;
+            visualizer.noteSequence = seq;
+            player.playing = false;
+            player.currentTime = 0;
+            // TODO MIDI TO COMPOUND
+        }).catch((reason) => {
+            log('Failed to load MIDI file. <br>');
+            console.log(reason);
+        });
+      });
+    }
   });
 
   /*************************** Model selection ********************************/

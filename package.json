@@ -9,7 +9,7 @@
     "dev": "npm-run-all --parallel watch:* serve",
     "watch:parcel": "parcel watch src/music_player.ts",
     "predeploy": "npm run build",
-    "deploy": "NODE_DEBUG=gh-pages gh-pages -d dist -r 'https://github.com/zihe-zhao/music-player.git'",
+    "deploy": "gh-pages -d dist -r 'https://github.com/zihe-zhao/music-player.git'",
     "postinstall": "patch-package"
   },
   "keywords": [],

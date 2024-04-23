@@ -26,7 +26,7 @@ body {
   top: 0;
   right: 0;
   bottom: 30%;
-  width: 180px; /* Adjust the width as needed */
+  width: 200px; /* Adjust the width as needed */
   background-color: #f1f1f1; /* Light grey background, change as needed */
   padding: 10px;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5); /* Optional: adds shadow for depth */
@@ -153,7 +153,7 @@ span {
   top: 70%;
   right: 0;
   bottom: 0;
-  width: 180px; /* Adjust the width as needed */
+  width: 200px; /* Adjust the width as needed */
   overflow-y: scroll; /* Enables vertical scrolling if content overflows */
   background-color: #f1f1f1; /* Light grey background, change as needed */
   padding: 10px;
