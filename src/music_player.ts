@@ -7,6 +7,8 @@ import { MIDILoader } from "./midi_loader.ts";
 import { tensorflow } from "@magenta/music/esm/protobuf/proto";
 import { GenerationConfig } from "@mlc-ai/web-llm";
 import { blobToNoteSequence } from '@magenta/music';
+import * as converter from './compound_converter.ts';
+import { Midi } from '@tonejs/midi'
 
 let log_flag = true;
 let current_midi_url;
@@ -178,9 +180,14 @@ async function main() {
   window.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('midiFile');
     if (fileInput) {
-      fileInput.addEventListener('change', (e) => {
-        log("Uploaded MIDI <br>")
+      fileInput.addEventListener('change', async (e) => {
+        
         const file = e.target.files[0];
+        // const reader = new FileReader();
+        // reader.onload = () => {
+
+        // }
+        log("Load MIDI into player. <br>");
         current_midi_url = URL.createObjectURL(file);
         blobToNoteSequence(file).then((seq) => {
             var player = document.getElementById("midi-player");
@@ -189,12 +196,17 @@ async function main() {
             visualizer.noteSequence = seq;
             player.playing = false;
             player.currentTime = 0;
-            // TODO MIDI TO COMPOUND
         }).catch((reason) => {
             log('Failed to load MIDI file. <br>');
             console.log(reason);
         });
-      });
+
+        log("Convert MIDI to tokens. <br>")
+        const midi = await Midi.fromUrl(current_midi_url);
+        const midiJSON = JSON.stringify(midi, undefined, 2);
+        const tokens = converter.midiToEvents(midiJSON);
+        log(`${tokens} <br>`);
+      }); // end change listener
     }
   });
 
