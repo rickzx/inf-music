@@ -1,5 +1,6 @@
 import * as webllm from "@mlc-ai/web-llm";
 import { CustomRequestParams, WorkerMessage } from "@mlc-ai/web-llm";
+import { AUTOREGRESS } from "./music_transformer_vocab";
 
 function setLabel(id: string, text: string) {
   const label = document.getElementById(id);
@@ -45,13 +46,16 @@ export class CustomChatWorkerClient extends webllm.ChatWorkerClient {
     return await this.getPromise<string>(msg);
   }
 
-  async resetGenerator(): Promise<void> {
+  async resetGenerator(prompt?: number[]): Promise<void> {
+    // Only take the last 510 tokens as the prompt
+    let tokens = prompt || [];
+    tokens = tokens.slice(Math.max(tokens.length - 510, 0));
     const msg: webllm.WorkerMessage = {
       kind: "customRequest",
       uuid: crypto.randomUUID(),
       content: {
         requestName: "resetGenerator",
-        requestMessage: ""
+        requestMessage: tokens.join()
       }
     };
     await this.getPromise<null>(msg);

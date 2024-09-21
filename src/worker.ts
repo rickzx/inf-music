@@ -69,12 +69,21 @@ class CustomChatWorkerHandler extends ChatWorkerHandler {
           console.log("Worker: reset music-transformer generator");
           this.handleTask(msg.uuid, async () => {
             this.chunkGenerator.interrupt();
+            let promptTokens;
+            if (params.requestMessage.length > 0) {
+              promptTokens = params.requestMessage
+                .split(",")
+                .map((str) => parseInt(str));
+            } else {
+              promptTokens = [];
+            }
 
             this.chunkGenerator = new ChunkGenerator();
             this.chunkIterator = this.chunkGenerator.chunkGenerate(
               chat,
               musicLogitProcessor,
-              this.callback
+              this.callback,
+              promptTokens
             );
             musicLogitProcessor.resetState();
             chat.resetChat();

@@ -1,5 +1,6 @@
 import { ChatInterface, GenerationConfig } from "@mlc-ai/web-llm";
 import { MusicLogitProcessor } from "./music_logit_processor";
+import { AUTOREGRESS } from "./music_transformer_vocab";
 
 export type GenerationProgressCallback = (
   generated: number,
@@ -32,17 +33,26 @@ export class ChunkGenerator {
   async *chunkGenerate(
     chat: ChatInterface,
     musicLogitProcessor: MusicLogitProcessor,
-    callback: GenerationProgressCallback
+    callback: GenerationProgressCallback,
+    prompt: Array<number> = []
   ): AsyncGenerator<Array<number>, void, void> {
+    const offset = prompt[0];
+    for (let i = 0; i < prompt.length; i += 3) {
+      prompt[i] -= offset;
+    }
+    prompt.unshift(AUTOREGRESS);
+    console.log("Worker: received prompt: ", prompt);
+    let startTime = prompt[-3];
+
     // Generate first token
-    let prompt: Array<number> = [55026];
     let nextToken = await chat.forwardTokensAndSample(
       prompt,
       /*isPrefill=*/ true,
       this.genConfig
     );
-    let tokenToGenerate = 1020;
-    let tokenGenerated = 0;
+    console.log("Worker: received first token: ", nextToken);
+    let tokenToGenerate = 1020 - prompt.length + 1;
+    let tokenGenerated = 1;
 
     // 1. Generate first 1020 tokens
     while (
@@ -61,24 +71,28 @@ export class ChunkGenerator {
       }
     }
 
+    prompt = [...musicLogitProcessor.tokenSequence];
+    for (let i = 0; i < tokenToGenerate; i += 3) {
+      prompt[i] -= startTime;
+    }
+
     if (this.interruptRequested) {
       musicLogitProcessor.resetState();
       yield Promise.reject("Interrupted");
       return;
     } else {
-      yield Promise.resolve(musicLogitProcessor.tokenSequence);
+      yield Promise.resolve(prompt);
     }
 
     tokenToGenerate = 510;
-    tokenGenerated = 0;
 
     // 2. Take last 510 tokens, make it the new prompt, starting from time 0
-    prompt = [...musicLogitProcessor.tokenSequence.slice(tokenToGenerate)];
-    let startTime = prompt[0];
+    prompt = prompt.slice(Math.max(prompt.length - tokenToGenerate, 0));;
+    startTime = prompt[0];
     for (let i = 0; i < tokenToGenerate; i += 3) {
       prompt[i] -= startTime;
     }
-    prompt.unshift(55026); // Add the AUTOREGRESS prompt back in, making the prompt 511
+    prompt.unshift(AUTOREGRESS); // Add the AUTOREGRESS prompt back in, making the prompt 511
 
     // 3. Clear KV cache and logitProcessor.tokenSequence
     chat.resetChat(/*keepStats=*/ true);
@@ -87,7 +101,7 @@ export class ChunkGenerator {
     let cycles = 0; // Number of 510-token chunks generated after the first 1020 tokens
     while (!this.interruptRequested) {
       // TODO: change to a user-triggered stop
-      let startTime = prompt[prompt.length - 3];
+      let startTime = prompt[-3];
 
       // 4.1. Prefill prompt and get first token
       musicLogitProcessor.curTime = prompt[-3]; // Update curTime so `future_logits()` still work
@@ -101,7 +115,7 @@ export class ChunkGenerator {
       }
 
       // 4.2. Decode autoregressively
-      tokenGenerated = 0;
+      tokenGenerated = 1;
       while (
         !this.interruptRequested &&
         musicLogitProcessor.tokenSequence.length < tokenToGenerate
@@ -129,7 +143,7 @@ export class ChunkGenerator {
       } else {
         yield Promise.resolve(prompt);
       }
-      prompt.unshift(55026); // Add the AUTOREGRESS prompt back in, making the prompt 511
+      prompt.unshift(AUTOREGRESS); // Add the AUTOREGRESS prompt back in, making the prompt 511
 
       // 4.4. Clear KV cache and logitProcessor.tokenSequence
       chat.resetChat(/*keepStats=*/ true);

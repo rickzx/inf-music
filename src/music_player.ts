@@ -69,19 +69,6 @@ async function update_midi(midi_src: string) {
   }
 }
 
-/**
- * Move the timestamp to 60 seconds and start playing from it.
- */
-async function move() {
-  var player = document.getElementById("midi-player");
-  if (player.playing) {
-    player.stop();
-  }
-  player.currentTime = 60;
-  player.start();
-  log(`Current playback position moved to 60s. <br>`);
-}
-
 function getModelId(model: string): string {
   if (model === "small") {
     return "music-small-800k-q0f32";
@@ -181,12 +168,8 @@ async function main() {
     const fileInput = document.getElementById('midiFile');
     if (fileInput) {
       fileInput.addEventListener('change', async (e) => {
-        
+        disableAllButtons();
         const file = e.target.files[0];
-        // const reader = new FileReader();
-        // reader.onload = () => {
-
-        // }
         log("Load MIDI into player. <br>");
         current_midi_url = URL.createObjectURL(file);
         blobToNoteSequence(file).then((seq) => {
@@ -201,11 +184,13 @@ async function main() {
             console.log(reason);
         });
 
-        log("Convert MIDI to tokens. <br>")
         const midi = await Midi.fromUrl(current_midi_url);
         const midiJSON = JSON.stringify(midi, undefined, 2);
         const tokens = converter.midiToEvents(midiJSON);
-        log(`${tokens} <br>`);
+        midi_loader.addEventTokens(tokens);
+        chat.resetGenerator(tokens);
+
+        enableAllButtons();
       }); // end change listener
     }
   });
