@@ -98,6 +98,32 @@ function getSelectedInstruments(): number[] {
   return selectedInstruments
 }
 
+async function loadMidiTokens(file: Blob) {
+  const fileInput = document.getElementById('midiFile');
+  if (fileInput === null) {
+    throw Error("Cannot find file input element");
+  }
+
+  log("Load MIDI into player. <br>");
+  current_midi_url = URL.createObjectURL(file);
+  blobToNoteSequence(file).then((seq) => {
+    var player = document.getElementById("midi-player");
+    var visualizer = document.getElementById("midi-visualizer");
+    player.noteSequence = seq;
+    visualizer.noteSequence = seq;
+    player.playing = false;
+    player.currentTime = 0;
+  }).catch((reason) => {
+    log('Failed to load MIDI file. <br>');
+    console.log(reason);
+  });
+
+  const midi = await Midi.fromUrl(current_midi_url);
+  const midiJSON = JSON.stringify(midi, undefined, 2);
+  const tokens = converter.midiToEvents(midiJSON);
+  return tokens;
+}
+
 async function main() {
   // Disable buttons before Web-LLM is fully loaded
   let chat: mt.CustomChatWorkerClient;
@@ -164,30 +190,22 @@ async function main() {
   });
 
   /*************************** Upload MIDI ********************************/
+  let midiFilePrompt;
+
   window.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('midiFile');
     if (fileInput) {
       fileInput.addEventListener('change', async (e) => {
         disableAllButtons();
-        const file = e.target.files[0];
-        log("Load MIDI into player. <br>");
-        current_midi_url = URL.createObjectURL(file);
-        blobToNoteSequence(file).then((seq) => {
-            var player = document.getElementById("midi-player");
-            var visualizer = document.getElementById("midi-visualizer");
-            player.noteSequence = seq;
-            visualizer.noteSequence = seq;
-            player.playing = false;
-            player.currentTime = 0;
-        }).catch((reason) => {
-            log('Failed to load MIDI file. <br>');
-            console.log(reason);
-        });
+        if (e.target === null || e.target.files === null || e.target.files.length === 0) {
+          enableAllButtons();
+          return;
+        }
 
-        const midi = await Midi.fromUrl(current_midi_url);
-        const midiJSON = JSON.stringify(midi, undefined, 2);
-        const tokens = converter.midiToEvents(midiJSON);
-        midi_loader.addEventTokens(tokens);
+        midiFilePrompt = e.target.files[0];
+        log("Load MIDI into player. <br>");
+        const tokens = await loadMidiTokens(midiFilePrompt);
+        midi_loader.setPrompt(tokens);
         chat.resetGenerator(tokens);
 
         enableAllButtons();
@@ -208,12 +226,14 @@ async function main() {
 
   reloadModelButton.addEventListener("click", async () => {
     disableAllButtons();
-    
+
     generationStopped = true;
     await chat.stopGenerator();
     await chat.resetChat();
-    await chat.resetGenerator();
+    const tokens = await loadMidiTokens(midiFilePrompt);
     midi_loader.reset();
+    midi_loader.setPrompt(tokens);
+    await chat.resetGenerator(tokens);
     generating = false;
     savedTokens = undefined;
 
@@ -294,7 +314,7 @@ async function main() {
       await chat.stopGenerator();
       await chat.resetChat();
       await chat.resetGenerator();
-      midi_loader.reset();
+      midi_loader.reset(true);
       generating = false;
       savedTokens = undefined;
       startButton.disabled = false;

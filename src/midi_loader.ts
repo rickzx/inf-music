@@ -5,12 +5,16 @@ export class MIDILoader {
   currCompounds: number[][];
   currDataUrl: string;
   currTime: number;
+  prompt: number[];
 
   constructor() {
     this.reset();
   }
 
-  reset() {
+  reset(clearPrompt: boolean = false): void {
+    if (clearPrompt) {
+      this.prompt = [];
+    }
     this.currCompounds = []
     this.currTime = 0;
   }
@@ -19,6 +23,15 @@ export class MIDILoader {
     let comp = converter.eventsToCompound(rawData, this.currTime);
     this.currCompounds = [...this.currCompounds, ...comp];
     this.currTime = comp[comp.length - 1][0];
+    console.log("Current generated time: " + this.currTime);
+    this.currDataUrl = converter.compoundToMidi(this.currCompounds);
+  }
+
+  setPrompt(rawData: number[]): void {
+    this.reset();
+    this.prompt = rawData;
+    this.currCompounds = converter.eventsToCompound(rawData, 0);
+    this.currTime = this.currCompounds[this.currCompounds.length - 1][0];
     console.log("Current generated time: " + this.currTime);
     this.currDataUrl = converter.compoundToMidi(this.currCompounds);
   }

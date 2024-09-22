@@ -36,13 +36,19 @@ export class ChunkGenerator {
     callback: GenerationProgressCallback,
     prompt: Array<number> = []
   ): AsyncGenerator<Array<number>, void, void> {
-    const offset = prompt[0];
-    for (let i = 0; i < prompt.length; i += 3) {
-      prompt[i] -= offset;
+    let startTime;
+
+    if (prompt.length != 0) {
+      const offset = prompt[0];
+      for (let i = 0; i < prompt.length; i += 3) {
+        prompt[i] -= offset;
+      }
+      startTime = prompt[prompt.length - 3];
+    } else {
+      startTime = 0;
     }
     prompt.unshift(AUTOREGRESS);
     console.log("Worker: received prompt: ", prompt);
-    let startTime = prompt[-3];
 
     // Generate first token
     let nextToken = await chat.forwardTokensAndSample(
@@ -71,6 +77,7 @@ export class ChunkGenerator {
       }
     }
 
+    console.log("Worker: start time: ", startTime);
     prompt = [...musicLogitProcessor.tokenSequence];
     for (let i = 0; i < tokenToGenerate; i += 3) {
       prompt[i] -= startTime;
@@ -92,7 +99,6 @@ export class ChunkGenerator {
     for (let i = 0; i < tokenToGenerate; i += 3) {
       prompt[i] -= startTime;
     }
-    prompt.unshift(AUTOREGRESS); // Add the AUTOREGRESS prompt back in, making the prompt 511
 
     // 3. Clear KV cache and logitProcessor.tokenSequence
     chat.resetChat(/*keepStats=*/ true);
@@ -101,10 +107,12 @@ export class ChunkGenerator {
     let cycles = 0; // Number of 510-token chunks generated after the first 1020 tokens
     while (!this.interruptRequested) {
       // TODO: change to a user-triggered stop
-      let startTime = prompt[-3];
+      let startTime = prompt[prompt.length - 3];
 
       // 4.1. Prefill prompt and get first token
-      musicLogitProcessor.curTime = prompt[-3]; // Update curTime so `future_logits()` still work
+      musicLogitProcessor.curTime = startTime; // Update curTime so `future_logits()` still work
+      prompt.unshift(AUTOREGRESS); // Add the AUTOREGRESS prompt back in, making the prompt 511
+
       nextToken = await chat.forwardTokensAndSample(
         prompt,
         /*isPrefill=*/ true,
@@ -143,7 +151,6 @@ export class ChunkGenerator {
       } else {
         yield Promise.resolve(prompt);
       }
-      prompt.unshift(AUTOREGRESS); // Add the AUTOREGRESS prompt back in, making the prompt 511
 
       // 4.4. Clear KV cache and logitProcessor.tokenSequence
       chat.resetChat(/*keepStats=*/ true);
