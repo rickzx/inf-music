@@ -99,6 +99,10 @@ function getSelectedInstruments(): number[] {
 }
 
 async function loadMidiTokens(file: Blob) {
+  if (file === null || file === undefined) {
+    return [];
+  }
+
   const fileInput = document.getElementById('midiFile');
   if (fileInput === null) {
     throw Error("Cannot find file input element");
@@ -162,6 +166,12 @@ async function main() {
     "frequencyPenalty-value"
   )!;
 
+  let ensemble_density = 0.0;
+  const ensemble_density_slider = document.getElementById("ensembleDensity")!;
+  const ensemble_density_value = document.getElementById(
+    "ensembleDensity-value"
+  )!;
+
   let genConfig: GenerationConfig = {
     temperature: parseFloat(temperature_value.innerHTML),
     top_p: parseFloat(top_p_value.innerHTML),
@@ -183,11 +193,31 @@ async function main() {
     genConfig.frequency_penalty = parseFloat((this as HTMLInputElement).value);
   };
 
+  ensemble_density_slider.oninput = function () {
+    ensemble_density_value.innerHTML = (this as HTMLInputElement).value;
+    ensemble_density = parseFloat((this as HTMLInputElement).value);
+    if (chat) chat.setEnsembleDensity(ensemble_density);
+  };
+
   submitInstrumentButton.addEventListener("click", async () => {
     log("Selected instruments: " + getSelectedInstruments().join(",") + "<br>");
     const selectedInstruments = getSelectedInstruments();
-    chat.selectInstrument(selectedInstruments.join(","));
+    if (chat) chat.selectInstrument(selectedInstruments.join(","));
   });
+
+  function readConfigs() {
+    genConfig = {
+      temperature: parseFloat(temperature_value.innerHTML),
+      top_p: parseFloat(top_p_value.innerHTML),
+      frequency_penalty: parseFloat(frequency_penalty_value.innerHTML),
+    };
+
+    ensemble_density = parseFloat(ensemble_density_value.innerHTML);
+    if (chat) chat.setEnsembleDensity(ensemble_density);
+
+    const selectedInstruments = getSelectedInstruments();
+    if (chat) chat.selectInstrument(selectedInstruments.join(","));
+  }
 
   /*************************** Upload MIDI ********************************/
   let midiFilePrompt;
@@ -207,6 +237,7 @@ async function main() {
         const tokens = await loadMidiTokens(midiFilePrompt);
         midi_loader.setPrompt(tokens);
         chat.resetGenerator(tokens);
+        readConfigs();
 
         enableAllButtons();
       }); // end change listener
@@ -239,6 +270,7 @@ async function main() {
 
     model_id = getModelId(requestedModel);
     await mt.reloadChat(chat, model_id);
+    readConfigs();
     enableAllButtons();
 
     log(`Web-LLM Chat reloaded with model: ${model_id} <br>`)
@@ -315,8 +347,14 @@ async function main() {
       await chat.resetChat();
       await chat.resetGenerator();
       midi_loader.reset(true);
+      const midiFileInput = document.getElementById('midiFile') as HTMLInputElement;
+      if (midiFileInput) {
+        midiFileInput.value = '';
+        update_midi(selectRandomMidi());
+      }
       generating = false;
       savedTokens = undefined;
+      readConfigs();
       startButton.disabled = false;
       pauseButton.disabled = false;
     });

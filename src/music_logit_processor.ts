@@ -8,6 +8,8 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
     public tokenSequence: Array<number> = [];
     public curTime: number = 0;
     public instrumentSet: number[] = [];
+    public notesSinceLast: { [key: number]: number } = {};
+    public ensembleDensity: number = 0.0;
 
     // TODO: unsure about the performance of all these for loops
     processLogits(logits: Float32Array): Float32Array {
@@ -74,6 +76,10 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
                 const instr = Math.floor((i - NOTE_OFFSET) / MAX_PITCH);
                 if (!this.instrumentSet.includes(instr)) {
                     logits[i] = Number.NEGATIVE_INFINITY;
+                } else {
+                    if (this.notesSinceLast[instr] > 0) {
+                        logits[i] += this.ensembleDensity * this.notesSinceLast[instr];
+                    }
                 }
             }
         }
@@ -85,17 +91,32 @@ export class MusicLogitProcessor implements webllm.LogitProcessor {
         // Update the time if we generated a time token
         const curIdx = this.tokenSequence.length;  // the index that `token` will become
         if (curIdx % 3 == 0) this.curTime = token;
+        if (curIdx % 3 == 2) {
+            const curInstr = Math.floor((token - NOTE_OFFSET) / MAX_PITCH);
+            if (this.instrumentSet.length > 0) {
+                for (let instr of this.instrumentSet) {
+                    this.notesSinceLast[instr] = (this.notesSinceLast[instr] || 0) + 1;
+                }
+                this.notesSinceLast[curInstr] = 0;
+            }
+            console.log("Notes since last: ", this.notesSinceLast);
+            console.log("Sampled instrument: ", curInstr);
+        }
         this.tokenSequence.push(token);
-        // console.log(this.tokenSequence.length + ": " + token);
     }
 
     resetState(): void {
         this.tokenSequence = [];
+        this.notesSinceLast = {};
         this.curTime = 0;
     }
 
     setInstrumentSet(instrs: number[]): void {
         this.instrumentSet = instrs;
+    }
+
+    setEnsembleDensity(ensembleDensity: number): void {
+        this.ensembleDensity = ensembleDensity;
     }
 }
 

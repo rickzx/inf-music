@@ -113,6 +113,11 @@ class CustomChatWorkerHandler extends ChatWorkerHandler {
             }
             return null;
           });
+        } else if (params.requestName == "setEnsembleDensity") {
+          this.handleTask(msg.uuid, async () => {
+            musicLogitProcessor.setEnsembleDensity(parseFloat(params.requestMessage));
+            return null;
+          });
         }
         return;
       }

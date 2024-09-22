@@ -29,6 +29,9 @@ export class MIDILoader {
 
   setPrompt(rawData: number[]): void {
     this.reset();
+    if (rawData.length == 0) {
+      return;
+    }
     this.prompt = rawData;
     this.currCompounds = converter.eventsToCompound(rawData, 0);
     this.currTime = this.currCompounds[this.currCompounds.length - 1][0];

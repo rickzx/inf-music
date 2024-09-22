@@ -97,6 +97,18 @@ export class CustomChatWorkerClient extends webllm.ChatWorkerClient {
     await this.getPromise<null>(msg);
   }
 
+  async setEnsembleDensity(ensembleDensity: number): Promise<void> {
+    const msg: webllm.WorkerMessage = {
+      kind: "customRequest",
+      uuid: crypto.randomUUID(),
+      content: {
+        requestName: "setEnsembleDensity",
+        requestMessage: ensembleDensity.toString()
+      }
+    };
+    await this.getPromise<null>(msg);
+  }
+
   onmessage(event: MessageEvent<any>): void {
     const msg = event.data as WorkerMessage;
     switch (msg.kind) {
