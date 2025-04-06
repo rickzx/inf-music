@@ -1,3 +1,28 @@
+// Monkey patch for WebGPU API before importing web-llm.
+// This is a workaround to the error "TypeError: A.requestAdapterInfo is not a function".
+// This error is fixed in WebLLM 0.2.71^, but this project uses 0.2.30.
+// This works for now, but should be removed when WebLLM dependency is updated.
+// For more, see https://github.com/mlc-ai/web-llm/pull/583.
+if (navigator.gpu) {
+  const originalRequestAdapter = navigator.gpu.requestAdapter;
+  navigator.gpu.requestAdapter = async function(...args) {
+    const adapter = await originalRequestAdapter.apply(this, args);
+    if (adapter && !adapter.requestAdapterInfo) {
+      // Add missing requestAdapterInfo method
+      adapter.requestAdapterInfo = async function() {
+        return { 
+          vendor: "unknown", 
+          architecture: "unknown", 
+          device: "unknown", 
+          description: "Completed" 
+        };
+      };
+    }
+    return adapter;
+  };
+}
+
+
 // Serve the chat workload through web worker
 import {
   ChatWorkerHandler,
