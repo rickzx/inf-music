@@ -145909,7 +145909,7 @@ function deleteModelWasmInCache(modelId, appConfig) {
     }
 }
 
-},{"31922f5d13fd4ce7":"euskh","8051b09d97eade71":"bCaf4","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","perf_hooks":"eoH60","d3a21db3ec7a36a9":"giopg"}],"giopg":[function(require,module,exports,__globalThis) {
+},{"31922f5d13fd4ce7":"euskh","8051b09d97eade71":"bCaf4","perf_hooks":"eoH60","d3a21db3ec7a36a9":"giopg","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"giopg":[function(require,module,exports,__globalThis) {
 /*
  * Copyright Joyent, Inc. and other Node contributors.
  *
