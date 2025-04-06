@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script type="importmap">{"imports":{"822cx":"/sample_0.70c15cd1.mid","aemzq":"/sample_1.574176ce.mid","14TLJ":"/sample_10.0badbf83.mid","7HWsD":"/sample_11.9d6359df.mid","iHUsy":"/sample_12.74cb8732.mid","gDBRL":"/sample_2.2088aedb.mid","9Z4CZ":"/sample_3.fc4f68cc.mid","6G1vL":"/sample_4.9304f2ae.mid","8rO7X":"/sample_5.1dbc7f15.mid","hKlmy":"/sample_6.46c48a1c.mid","sR96f":"/sample_7.58a39f20.mid","gDPtb":"/sample_8.9a6fa853.mid","9TdjE":"/sample_9.d015306e.mid","jTZXQ":"/worker.7db43ac5.js"}}</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Music Player</title>
+    <link rel="stylesheet" href="/music_player.48580222.css">
+    <link rel="icon" href="/icon.6575fac7.png" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="github-icon">
+            <a href="https://github.com/rickzx/music-transformer-demo" target="_blank">
+                <i class="fab fa-github fa-3x"></i>
+            </a>
+        </div>
+        <h1>Infinite Music Player <br> with Anticipatory Music Transformer</h1>
+        <label id="init-label"> </label>
+        <br>
+        <br>
+        <div>
+            <midi-visualizer type="piano-roll" id="midi-visualizer">
+            </midi-visualizer>
+            <midi-player id="midi-player" sound-font="" visualizer="#midi-visualizer">
+            </midi-player>
+        </div>
+
+        <div>
+            <button id="startButton">Start Generator</button>
+            <button id="pauseButton">Pause Generator</button>
+            <button id="resetButton">Reset Generator</button>
+            <button id="downloadMidiButton">Download MIDI</button>
+        </div>
+
+        <div class="footnote">
+            Created by Rick Zhou, Zihe Zhao<br>
+            Advised by Professor Chris Donahue <br> 
+            2024 @ Carnegie Mellon University. <br>
+            Powered by <a href="https://arxiv.org/abs/2306.08620" target="_blank">Anticipatory Music Transformer</a> and <a href="https://github.com/mlc-ai/web-llm" target="_blank">Web-LLM</a>
+        </div>
+    </div>
+
+    <div class="config-panel" id="config-panel">
+        <div class="config-panel-header">
+            <h4>Configuration</h4>
+        </div>            
+        <div class="config-panel-content">
+            <div class="config-panel-row">
+                <label for="midiFile">Upload MIDI prompt:</label>
+                <input type="file" id="midiFile" name="midiFile" accept="audio/midi, audio/x-midi">
+            </div>
+            <hr>
+            <div class="dropdown-container">
+                <label for="modelSize">Choose a model size:</label>
+                <select id="modelSize">
+                    <option value="small" selected="">Small Model</option>
+                    <option value="medium">Medium Model</option>
+                </select>
+                <button id="reloadButton">Reload Model</button>
+            </div>
+            <hr>
+            <p>Effective at next chunk<br></p>
+            <div class="config-panel-row">
+                <label for="temperature">Temperature</label>
+                <input type="range" id="temperature" min="0.1" max="1.0" step="0.02" value="1.0">
+                <span id="temperature-value">1.0</span>
+            </div>
+            <div class="config-panel-row">
+                <label for="topP">Top P</label>
+                <input type="range" id="topP" min="0.1" max="1.0" step="0.02" value="0.98">
+                <span id="topP-value">0.98</span>
+            </div>
+            <div class="config-panel-row">
+                <label for="frequencyPenalty">Frequency Penalty</label>
+                <input type="range" id="frequencyPenalty" min="-2.0" max="2.0" step="0.1" value="0.0">
+                <span id="frequencyPenalty-value">0.0</span>
+            </div>
+            <hr>
+            <div class="config-panel-row">
+                <label for="instruments">Instrument Selection<br> (If empty, will include all instruments)</label>
+                <label for="ensembleDensity">Ensemble Density</label>
+                <input type="range" id="ensembleDensity" min="0.0" max="3.0" step="0.05" value="0.0">
+                <span id="ensembleDensity-value">0.0</span>
+                <button type="button" id="submitInstrumentsButton">Save Instruments</button>
+                <form id="midiForm">
+                    <input type="checkbox" id="acousticGrandPiano" name="instruments" value="0"> Acoustic Grand Piano<br>
+                    <input type="checkbox" id="electricGuitarClean" name="instruments" value="27"> Electric Guitar<br>
+                    <input type="checkbox" id="stringEnsemble1" name="instruments" value="48"> String Ensemble<br>
+                    <input type="checkbox" id="electricBassFinger" name="instruments" value="33"> Electric Bass<br>
+                    <input type="checkbox" id="violin" name="instruments" value="40"> Violin<br>
+                    <input type="checkbox" id="cello" name="instruments" value="42"> Cello<br>
+                    <input type="checkbox" id="trumpet" name="instruments" value="56"> Trumpet<br>
+                    <input type="checkbox" id="clarinet" name="instruments" value="71"> Clarinet<br>
+                    <input type="checkbox" id="flute" name="instruments" value="73"> Flute<br>
+                    <input type="checkbox" id="percussiveOrgan" name="instruments" value="17"> Percussive Organ<br>
+                    <input type="checkbox" id="harpsichord" name="instruments" value="6"> Harpsichord<br>
+                    <input type="checkbox" id="acousticGuitarNylon" name="instruments" value="24"> Acoustic Guitar<br>
+                    <input type="checkbox" id="drumKit" name="instruments" value="128"> Drum Kit<br>
+                </form>
+            </div> 
+    </div>
+
+    <div class="debug" id="debug">
+        <hr>
+        <!-- <button class="testing_button" id="switchButton">Play Tchaikovsky</button>
+        <button class="testing_button" id="moveButton">Move timestamp</button>
+        <button class="testing_button" id="convertButton">Convert to Twinkle</button> -->
+        <h4>Log:<br></h4>
+        <p id="log">
+            <!-- We are going to get rid of the buttons later. Just putting them here to show that we could:<br>
+            &nbsp 1. change the midi file that is being played. The original sound file is Greig, but click button to play Tchaikovsky.<br>
+            &nbsp 2. start playing at a specified timestamp. No matter how far along we are in the music, start playing at 60 seconds.<br>
+            &nbsp 3. convert raw output of Twinkle Twinkle Little Star to MIDI (see <a href="https://arxiv.org/pdf/2306.08620.pdf" target="_blank">this paper</a>). 
+            We expect these functions to come in handy later.<br><br> -->
+        </p>
+    </div>
+</div></body>
+</html>
+
+<script src="https://cdn.jsdelivr.net/combine/npm/tone@14.7.58,npm/@magenta/music@1.23.1/es6/core.js,npm/focus-visible@5,npm/html-midi-player@1.5.0"></script>
+<script type="module" src="/music_player.d957d2f6.js"></script>
