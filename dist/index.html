@@ -99,127 +99,6 @@
                     <input type="checkbox" id="drumKit" name="instruments" value="128"> Drum Kit<br>
                 </form>
             </div> 
-                        <!-- 在这个位置添加Trading 8 Bars部分 -->
-            <!-- 查找 <div class="config-panel-content"> 标签内，在最后一个 </div> 之前添加下面的代码 -->
-
-            <hr>
-            <!-- Trading 8 Bars Control Panel -->
-            <div class="config-panel-section" id="trading-section">
-            <h4>Trading 8 Bars</h4>
-            <div class="config-panel-row">
-                <label for="enableTrading">Enable Trading Mode</label>
-                <label class="switch">
-                <input type="checkbox" id="enableTrading">
-                <span class="slider round"></span>
-                </label>
-            </div>
-            
-            <div class="config-panel-row">
-                <label for="barsPerTrade">Bars per Trade:</label>
-                <select id="barsPerTrade" class="form-control">
-                <option value="4">4 bars</option>
-                <option value="8" selected="">8 bars</option>
-                <option value="12">12 bars</option>
-                <option value="16">16 bars</option>
-                </select>
-            </div>
-            
-            <div class="config-panel-row">
-                <label for="tradingStyle">AI Response Style:</label>
-                <select id="tradingStyle" class="form-control">
-                <option value="mimic">Mimic (similar style)</option>
-                <option value="contrast">Contrast (different style)</option>
-                <option value="develop">Develop (build on themes)</option>
-                </select>
-            </div>
-            
-            <div class="trading-controls">
-                <button id="startTradingButton">Start Trading Session</button>
-                <button id="addHumanPartButton" disabled="">Add My Part</button>
-                <button id="generateAIPartButton" disabled="">Generate AI Response</button>
-                <div id="tradingStatus" class="status-message">Ready to start trading session</div>
-            </div>
-        </div>
-            <!-- Click Track Card -->
-    <div class="card mt-3">
-        <div class="card-header bg-secondary text-white">
-        <h5 class="card-title mb-0">Click Track</h5>
-        </div>
-        <div class="card-body">
-        <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="enableClickTrack">
-            <label class="form-check-label" for="enableClickTrack">Enable Click Track</label>
-        </div>
-        
-        <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="showClickTrack" checked="">
-            <label class="form-check-label" for="showClickTrack">Include in Output</label>
-        </div>
-        
-        <div class="row mb-3">
-            <label for="bpm" class="col-sm-4 col-form-label">Tempo (BPM):</label>
-            <div class="col-sm-6">
-            <input type="range" class="form-range" min="60" max="200" step="1" id="bpm" value="120">
-            </div>
-            <div class="col-sm-2">
-            <span id="bpm-value">120</span>
-            </div>
-        </div>
-        
-        <div class="row mb-3">
-            <label for="clickStrength" class="col-sm-4 col-form-label">Influence:</label>
-            <div class="col-sm-6">
-            <input type="range" class="form-range" min="0" max="10" step="0.5" id="clickStrength" value="3.0">
-            </div>
-            <div class="col-sm-2">
-            <span id="clickStrength-value">3.0</span>
-            </div>
-        </div>
-        
-        <div class="row mb-3">
-            <label class="col-sm-4 col-form-label">Time Signature:</label>
-            <div class="col-sm-8">
-            <select class="form-select" id="timeSignature">
-                <option value="4,4" selected="">4/4 (Common Time)</option>
-                <option value="3,4">3/4 (Waltz Time)</option>
-                <option value="6,8">6/8 (Compound)</option>
-                <option value="5,4">5/4 (Quintuple)</option>
-                <option value="7,8">7/8 (Odd Meter)</option>
-            </select>
-            </div>
-        </div>
-        
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" id="accentFirstBeat" checked="">
-            <label class="form-check-label" for="accentFirstBeat">Accent First Beat</label>
-        </div>
-        
-        <div class="row mb-3">
-            <div class="col">
-            <button class="btn btn-primary w-100" id="applyClickTrackButton">Apply Settings</button>
-            </div>
-            <div class="col">
-            <button class="btn btn-outline-secondary w-100" id="previewClickTrackButton">Preview Click</button>
-            </div>
-            <!-- <div class="col">
-            <button class="btn btn-outline-primary w-100" id="useAsPromptButton">Use as Prompt</button>
-            </div> -->
-        </div>
-        
-        <div class="row mb-3">
-            <div class="col">
-            <button class="btn btn-outline-info w-100" id="showBeatsButton">Show Beat Pattern</button>
-            </div>
-        </div>
-        
-        <div class="form-text text-muted">
-            <small>
-            experiment with or without clicks by opening the enable button above
-            </small>
-        </div>
-        </div>
-    </div>
-  </div>
     </div>
 
     <div class="debug" id="debug">
@@ -236,7 +115,7 @@
             We expect these functions to come in handy later.<br><br> -->
         </p>
     </div>
-</body>
+</div></body>
 </html>
 
 <script src="https://cdn.jsdelivr.net/combine/npm/tone@14.7.58,npm/@magenta/music@1.23.1/es6/core.js,npm/focus-visible@5,npm/html-midi-player@1.5.0"></script>
