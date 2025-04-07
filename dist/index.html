@@ -78,46 +78,41 @@
             </div>
             <hr>
             <div class="config-panel-row">
-                <h5>Instrument Selection<br> (If empty, will include all instruments)</h5>
+                <label for="instruments">Instrument Selection<br> (If empty, will include all instruments)</label>
                 <label for="ensembleDensity">Ensemble Density</label>
                 <input type="range" id="ensembleDensity" min="0.0" max="3.0" step="0.05" value="0.0">
                 <span id="ensembleDensity-value">0.0</span>
                 <button type="button" id="submitInstrumentsButton">Save Instruments</button>
                 <form id="midiForm">
-                    <input type="checkbox" id="acousticGrandPiano" name="instruments" value="0">
-                    <label for="acousticGrandPiano">Acoustic Grand Piano</label><br>
-                    <input type="checkbox" id="electricGuitarClean" name="instruments" value="27">
-                    <label for="electricGuitarClean">Electric Guitar</label><br>
-                    <input type="checkbox" id="stringEnsemble1" name="instruments" value="48">
-                    <label for="stringEnsemble1">String Ensemble</label><br>
-                    <input type="checkbox" id="electricBassFinger" name="instruments" value="33">
-                    <label for="electricBassFinger">Electric Bass</label><br>
-                    <input type="checkbox" id="violin" name="instruments" value="40">
-                    <label for="violin">Violin</label><br>
-                    <input type="checkbox" id="cello" name="instruments" value="42">
-                    <label for="cello">Cello</label><br>
-                    <input type="checkbox" id="trumpet" name="instruments" value="56">
-                    <label for="trumpet">Trumpet</label><br>
-                    <input type="checkbox" id="clarinet" name="instruments" value="71">
-                    <label for="clarinet">Clarinet</label><br>
-                    <input type="checkbox" id="flute" name="instruments" value="73">
-                    <label for="flute">Flute</label><br>
-                    <input type="checkbox" id="percussiveOrgan" name="instruments" value="17">
-                    <label for="percussiveOrgan">Percussive Organ</label><br>
-                    <input type="checkbox" id="harpsichord" name="instruments" value="6">
-                    <label for="harpsichord">Harpsichord</label><br>
-                    <input type="checkbox" id="acousticGuitarNylon" name="instruments" value="24">
-                    <label for="acousticGuitarNylon">Acoustic Guitar</label><br>
-                    <input type="checkbox" id="drumKit" name="instruments" value="128">
-                    <label for="drumKit">Drum Kit</label><br>
+                    <input type="checkbox" id="acousticGrandPiano" name="instruments" value="0"> Acoustic Grand Piano<br>
+                    <input type="checkbox" id="electricGuitarClean" name="instruments" value="27"> Electric Guitar<br>
+                    <input type="checkbox" id="stringEnsemble1" name="instruments" value="48"> String Ensemble<br>
+                    <input type="checkbox" id="electricBassFinger" name="instruments" value="33"> Electric Bass<br>
+                    <input type="checkbox" id="violin" name="instruments" value="40"> Violin<br>
+                    <input type="checkbox" id="cello" name="instruments" value="42"> Cello<br>
+                    <input type="checkbox" id="trumpet" name="instruments" value="56"> Trumpet<br>
+                    <input type="checkbox" id="clarinet" name="instruments" value="71"> Clarinet<br>
+                    <input type="checkbox" id="flute" name="instruments" value="73"> Flute<br>
+                    <input type="checkbox" id="percussiveOrgan" name="instruments" value="17"> Percussive Organ<br>
+                    <input type="checkbox" id="harpsichord" name="instruments" value="6"> Harpsichord<br>
+                    <input type="checkbox" id="acousticGuitarNylon" name="instruments" value="24"> Acoustic Guitar<br>
+                    <input type="checkbox" id="drumKit" name="instruments" value="128"> Drum Kit<br>
                 </form>
             </div> 
     </div>
 
     <div class="debug" id="debug">
         <hr>
+        <!-- <button class="testing_button" id="switchButton">Play Tchaikovsky</button>
+        <button class="testing_button" id="moveButton">Move timestamp</button>
+        <button class="testing_button" id="convertButton">Convert to Twinkle</button> -->
         <h4>Log:<br></h4>
         <p id="log">
+            <!-- We are going to get rid of the buttons later. Just putting them here to show that we could:<br>
+            &nbsp 1. change the midi file that is being played. The original sound file is Greig, but click button to play Tchaikovsky.<br>
+            &nbsp 2. start playing at a specified timestamp. No matter how far along we are in the music, start playing at 60 seconds.<br>
+            &nbsp 3. convert raw output of Twinkle Twinkle Little Star to MIDI (see <a href="https://arxiv.org/pdf/2306.08620.pdf" target="_blank">this paper</a>). 
+            We expect these functions to come in handy later.<br><br> -->
         </p>
     </div>
 </div></body>
