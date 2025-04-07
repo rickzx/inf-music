@@ -704,6 +704,10 @@ class CustomChatWorkerHandler extends (0, _webLlm.ChatWorkerHandler) {
         this.chunkGenerator = new (0, _musicTransformerGenerate.ChunkGenerator)();
         this.chunkIterator = this.chunkGenerator.chunkGenerate(chat, musicLogitProcessor, this.callback);
     }
+    // 获取LogitProcessor
+    getLogitProcessor() {
+        return musicLogitProcessor;
+    }
     onmessage(event) {
         const msg = event.data;
         switch(msg.kind){
@@ -711,7 +715,27 @@ class CustomChatWorkerHandler extends (0, _webLlm.ChatWorkerHandler) {
                 {
                     const params = msg.content;
                     if (params.requestName == "chunkGenerate") {
-                        const genConfig = JSON.parse(params.requestMessage);
+                        // 添加检查，确保有有效的请求信息
+                        let genConfig;
+                        if (!params.requestMessage || params.requestMessage === "undefined") {
+                            console.log("Worker: received invalid config, using defaults");
+                            // 使用默认配置
+                            genConfig = {
+                                temperature: 1.0,
+                                top_p: 0.98,
+                                frequency_penalty: 0.0
+                            };
+                        } else try {
+                            genConfig = JSON.parse(params.requestMessage);
+                        } catch (error) {
+                            console.error("Worker: error parsing config, using defaults", error);
+                            // 解析错误时也使用默认配置
+                            genConfig = {
+                                temperature: 1.0,
+                                top_p: 0.98,
+                                frequency_penalty: 0.0
+                            };
+                        }
                         this.chunkGenerator.setGenConfig(genConfig);
                         console.log("Worker: generating music-transformer tokens with config", genConfig);
                         this.handleTask(msg.uuid, async ()=>{
@@ -754,6 +778,29 @@ class CustomChatWorkerHandler extends (0, _webLlm.ChatWorkerHandler) {
                     } else if (params.requestName == "setEnsembleDensity") this.handleTask(msg.uuid, async ()=>{
                         musicLogitProcessor.setEnsembleDensity(parseFloat(params.requestMessage));
                         return null;
+                    });
+                    else if (params.requestName == "enableClickTrack") {
+                        console.log("Worker: " + (params.requestMessage === "true" ? "enabling" : "disabling") + " click track");
+                        this.handleTask(msg.uuid, async ()=>{
+                            const enabled = params.requestMessage === "true";
+                            if (typeof musicLogitProcessor.enableClickTrack === 'function') musicLogitProcessor.enableClickTrack(enabled);
+                            else console.error("Worker: enableClickTrack method not found on musicLogitProcessor");
+                            return null;
+                        });
+                    } else if (params.requestName == "updateClickTrack") {
+                        console.log("Worker: updating click track settings");
+                        this.handleTask(msg.uuid, async ()=>{
+                            try {
+                                const options = JSON.parse(params.requestMessage);
+                                if (typeof musicLogitProcessor.updateClickTrack === 'function') musicLogitProcessor.updateClickTrack(options);
+                                else console.error("Worker: updateClickTrack method not found on musicLogitProcessor");
+                            } catch (error) {
+                                console.error("Error updating click track:", error);
+                            }
+                            return null;
+                        });
+                    } else if (params.requestName == "getLogitProcessor") this.handleTask(msg.uuid, async ()=>{
+                        return "LogitProcessor available";
                     });
                     return;
                 }
@@ -20649,6 +20696,16 @@ parcelHelpers.export(exports, "MusicLogitProcessor", ()=>MusicLogitProcessor);
 var _musicTransformerVocab = require("./music_transformer_vocab");
 var _musicTransformerConfig = require("./music_transformer_config");
 class MusicLogitProcessor {
+    enableClickTrack(enable) {
+        this.useClickTrack = enable;
+    }
+    updateClickTrack(options) {
+        this.clickTrackOptions = {
+            ...this.clickTrackOptions,
+            ...options
+        };
+    // 更新内部状态，如果需要的话
+    }
     // TODO: unsure about the performance of all these for loops
     processLogits(logits) {
         // Directly from https://github.com/jthickstun/anticipation/blob/main/anticipation/sample.py
@@ -20720,6 +20777,18 @@ class MusicLogitProcessor {
         this.instrumentSet = [];
         this.notesSinceLast = {};
         this.ensembleDensity = 0.0;
+        // 添加到MusicLogitProcessor类中
+        this.useClickTrack = false;
+        this.clickTrackOptions = {
+            bpm: 120,
+            pattern: [
+                4,
+                4
+            ],
+            strength: 3.0,
+            accentFirstBeat: true,
+            timeDivision: 480
+        };
     }
 }
 function getInstruments(tokens) {
