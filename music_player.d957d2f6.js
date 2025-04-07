@@ -666,9 +666,6 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 
 // Monkey patch for WebGPU API before importing web-llm
 // Serve the chat workload through web worker
-var _webLlm = require("@mlc-ai/web-llm");
-var _musicLogitProcessor = require("./music_logit_processor");
-var _musicTransformerGenerate = require("./music_transformer_generate");
 if (navigator.gpu) {
     const originalRequestAdapter = navigator.gpu.requestAdapter;
     navigator.gpu.requestAdapter = async function(...args) {
