@@ -670,6 +670,10 @@ var _midiLoaderTs = require("./midi_loader.ts");
 var _music = require("@magenta/music");
 var _compoundConverterTs = require("./compound_converter.ts");
 var _midi = require("@tonejs/midi");
+var _tradingBarsJs = require("./trading_bars.js");
+var _clickTrack = require("./click_track");
+window.update_midi = update_midi;
+window.loadMidiTokens = loadMidiTokens;
 let log_flag = true;
 let current_midi_url;
 /**
@@ -784,9 +788,9 @@ async function main() {
     const ensemble_density_slider = document.getElementById("ensembleDensity");
     const ensemble_density_value = document.getElementById("ensembleDensity-value");
     let genConfig = {
-        temperature: parseFloat(temperature_value.innerHTML),
+        temperature: parseFloat(temperature_value.innerHTML) - 0.2,
         top_p: parseFloat(top_p_value.innerHTML),
-        frequency_penalty: parseFloat(frequency_penalty_value.innerHTML)
+        frequency_penalty: parseFloat(frequency_penalty_value.innerHTML) - 0.3
     };
     temperature_slider.oninput = function() {
         temperature_value.innerHTML = this.value;
@@ -810,6 +814,291 @@ async function main() {
         const selectedInstruments = getSelectedInstruments();
         if (chat) chat.selectInstrument(selectedInstruments.join(","));
     });
+    /**
+ * 以下是需要在music_player.ts中添加或修改的代码
+ */ /*************************** Click Track Configurations ********************************/ // 获取UI元素 - 添加showClickTrack和showBeatsButton
+    const enableClickTrackCheckbox = document.getElementById("enableClickTrack");
+    const showClickTrackCheckbox = document.getElementById("showClickTrack");
+    const bpmSlider = document.getElementById("bpm");
+    const bpmValue = document.getElementById("bpm-value");
+    const clickStrengthSlider = document.getElementById("clickStrength");
+    const clickStrengthValue = document.getElementById("clickStrength-value");
+    const timeSignatureSelect = document.getElementById("timeSignature");
+    const accentFirstBeatCheckbox = document.getElementById("accentFirstBeat");
+    const applyClickTrackButton = document.getElementById("applyClickTrackButton");
+    const previewClickTrackButton = document.getElementById("previewClickTrackButton");
+    const useAsPromptButton = document.getElementById("useAsPromptButton");
+    const showBeatsButton = document.getElementById("showBeatsButton");
+    // 声明全局变量来跟踪ClickTrack状态
+    let clickTrackGenerator = null;
+    let clickVisualizer = null;
+    // 添加showClickTrack的事件处理
+    if (showClickTrackCheckbox) showClickTrackCheckbox.onchange = function() {
+        const show = this.checked;
+        midi_loader.setShowClickTrack(show);
+        log(`Click track will ${show ? 'be included in' : 'not be included in'} output<br>`);
+        // 如果已经有MIDI数据，更新显示
+        if (midi_loader.getMIDIData()) update_midi(midi_loader.getMIDIData());
+    };
+    // 添加showBeatsButton的事件处理
+    if (showBeatsButton) showBeatsButton.addEventListener("click", function() {
+        if (!clickVisualizer) // 首次点击时创建可视化器
+        clickVisualizer = new (0, _clickTrack.ClickTrackVisualizer)(midi_loader, {
+            bpm: parseInt(bpmSlider.value),
+            pattern: timeSignatureSelect.value.split(',').map(Number),
+            accentFirstBeat: accentFirstBeatCheckbox.checked,
+            timeDivision: 60
+        });
+        // 切换可视化模式
+        clickVisualizer.toggleBeatVisualization();
+        showBeatsButton.textContent = clickVisualizer.visualMode === 'highlight' ? 'Hide Beat Pattern' : 'Show Beat Pattern';
+        // 更新MIDI显示
+        update_midi(clickVisualizer.createVisualization());
+        log(`Beat pattern visualization ${clickVisualizer.visualMode === 'highlight' ? 'enabled' : 'disabled'}<br>`);
+    });
+    // 修改预览Click Track的辅助函数
+    function previewClickTrack() {
+        if (bpmSlider && timeSignatureSelect && clickStrengthSlider && accentFirstBeatCheckbox && showClickTrackCheckbox) {
+            // 创建一个临时的Click Track生成器
+            const options = {
+                bpm: parseInt(bpmSlider.value),
+                pattern: timeSignatureSelect.value.split(',').map(Number),
+                strength: parseFloat(clickStrengthSlider.value),
+                accentFirstBeat: accentFirstBeatCheckbox.checked,
+                timeDivision: 60,
+                includeInOutput: showClickTrackCheckbox.checked // 添加includeInOutput选项
+            };
+            if (!clickTrackGenerator) clickTrackGenerator = new (0, _clickTrack.ClickTrackGenerator)(options);
+            else clickTrackGenerator.updateOptions(options);
+            // 生成2小节的Click Track
+            clickTrackGenerator.generateClickTrack(2);
+            // 设置MIDILoader的Click Track生成器
+            midi_loader.setClickTrackGenerator(clickTrackGenerator);
+            midi_loader.setShowClickTrack(options.includeInOutput);
+            // 创建MIDI并加载到播放器
+            const clickMidiUrl = clickTrackGenerator.createMIDI(midi_loader); // 传入midi_loader
+            update_midi(clickMidiUrl);
+            log("Previewing 2 bars of click track<br>");
+        }
+    }
+    // 修改应用Click Track设置的辅助函数
+    function applyClickTrackSettings() {
+        if (chat && bpmSlider && timeSignatureSelect && clickStrengthSlider && accentFirstBeatCheckbox && showClickTrackCheckbox) {
+            const options = {
+                bpm: parseInt(bpmSlider.value),
+                pattern: timeSignatureSelect.value.split(',').map(Number),
+                strength: parseFloat(clickStrengthSlider.value),
+                accentFirstBeat: accentFirstBeatCheckbox.checked,
+                timeDivision: 480,
+                includeInOutput: showClickTrackCheckbox.checked // 添加includeInOutput选项
+            };
+            // 更新逻辑处理器的click track设置
+            chat.updateClickTrack(options);
+            // 更新或创建Click Track生成器
+            if (!clickTrackGenerator) clickTrackGenerator = new (0, _clickTrack.ClickTrackGenerator)(options);
+            else clickTrackGenerator.updateOptions(options);
+            // 更新MIDILoader
+            midi_loader.setClickTrackGenerator(clickTrackGenerator);
+            midi_loader.setShowClickTrack(options.includeInOutput);
+            // 如果有可视化器，也更新它
+            if (clickVisualizer) clickVisualizer.updateOptions(options);
+        }
+    }
+    // 修改"使用Click Track作为提示"的功能
+    if (useAsPromptButton) useAsPromptButton.addEventListener("click", async function() {
+        disableAllButtons();
+        // 创建Click Track提示
+        if (chat && bpmSlider && timeSignatureSelect && clickStrengthSlider && accentFirstBeatCheckbox && showClickTrackCheckbox) {
+            const options = {
+                bpm: parseInt(bpmSlider.value),
+                pattern: timeSignatureSelect.value.split(',').map(Number),
+                strength: parseFloat(clickStrengthSlider.value),
+                accentFirstBeat: accentFirstBeatCheckbox.checked,
+                timeDivision: 480,
+                includeInOutput: showClickTrackCheckbox.checked
+            };
+            // 使用ClickTrackGenerator创建Click Track
+            if (!clickTrackGenerator) clickTrackGenerator = new (0, _clickTrack.ClickTrackGenerator)(options);
+            else clickTrackGenerator.updateOptions(options);
+            // 生成2小节的Click Track作为提示
+            clickTrackGenerator.generateClickTrack(2);
+            const clickTokens = clickTrackGenerator.tokens;
+            // 重置MIDI加载器并添加Click Track作为初始提示
+            midi_loader.reset(true);
+            midi_loader.setClickTrackGenerator(clickTrackGenerator);
+            midi_loader.setShowClickTrack(options.includeInOutput);
+            midi_loader.addEventTokens(clickTokens);
+            // 显示在播放器中
+            update_midi(midi_loader.getMIDIData());
+            // 将Click Track传递给生成器
+            await chat.resetGenerator(clickTokens);
+            log("Added 2 bars of click track as initial prompt<br>");
+        }
+        enableAllButtons();
+    });
+    /**
+ * 初始化Click Track功能
+ * 这个函数应该在main函数中调用
+ */ function initializeClickTrack() {
+        // 获取UI元素
+        const enableClickTrackCheckbox = document.getElementById("enableClickTrack");
+        const showClickTrackCheckbox = document.getElementById("showClickTrack");
+        const bpmSlider = document.getElementById("bpm");
+        const bpmValue = document.getElementById("bpm-value");
+        const clickStrengthSlider = document.getElementById("clickStrength");
+        const clickStrengthValue = document.getElementById("clickStrength-value");
+        const timeSignatureSelect = document.getElementById("timeSignature");
+        const accentFirstBeatCheckbox = document.getElementById("accentFirstBeat");
+        const applyClickTrackButton = document.getElementById("applyClickTrackButton");
+        const previewClickTrackButton = document.getElementById("previewClickTrackButton");
+        const useAsPromptButton = document.getElementById("useAsPromptButton");
+        const showBeatsButton = document.getElementById("showBeatsButton");
+        // 创建Click Track生成器
+        clickTrackGenerator = new (0, _clickTrack.ClickTrackGenerator)();
+        // 设置UI事件处理程序
+        if (bpmSlider) bpmSlider.oninput = function() {
+            if (bpmValue) bpmValue.innerHTML = this.value;
+        };
+        if (clickStrengthSlider) clickStrengthSlider.oninput = function() {
+            if (clickStrengthValue) clickStrengthValue.innerHTML = this.value;
+        };
+        // 启用/禁用Click Track
+        if (enableClickTrackCheckbox) enableClickTrackCheckbox.onchange = function() {
+            const enabled = this.checked;
+            if (chat) {
+                chat.enableClickTrack(enabled);
+                log(`Click track ${enabled ? 'enabled' : 'disabled'}<br>`);
+                // 如果启用，则应用当前设置
+                if (enabled) applyClickTrackSettings();
+            }
+        };
+        // 显示/隐藏Click Track
+        if (showClickTrackCheckbox) showClickTrackCheckbox.onchange = function() {
+            const show = this.checked;
+            if (midi_loader) {
+                midi_loader.setShowClickTrack(show);
+                log(`Click track ${show ? 'included in' : 'excluded from'} output<br>`);
+                // 如果已经有MIDI数据，更新显示
+                if (midi_loader.getMIDIData()) update_midi(midi_loader.getMIDIData());
+            }
+        };
+        // 应用Click Track设置
+        if (applyClickTrackButton) applyClickTrackButton.addEventListener("click", function() {
+            applyClickTrackSettings();
+            log("Applied click track settings<br>");
+        });
+        // 预览Click Track
+        if (previewClickTrackButton) previewClickTrackButton.addEventListener("click", function() {
+            previewClickTrack();
+        });
+        // 使用Click Track作为提示
+        if (useAsPromptButton) useAsPromptButton.addEventListener("click", async function() {
+            disableAllButtons();
+            // 创建Click Track提示
+            if (chat && bpmSlider && timeSignatureSelect && clickStrengthSlider && accentFirstBeatCheckbox && showClickTrackCheckbox) {
+                const options = {
+                    bpm: parseInt(bpmSlider.value),
+                    pattern: timeSignatureSelect.value.split(',').map(Number),
+                    strength: parseFloat(clickStrengthSlider.value),
+                    accentFirstBeat: accentFirstBeatCheckbox.checked,
+                    timeDivision: 480,
+                    includeInOutput: showClickTrackCheckbox.checked
+                };
+                // 使用ClickTrackGenerator创建Click Track
+                if (!clickTrackGenerator) clickTrackGenerator = new (0, _clickTrack.ClickTrackGenerator)(options);
+                else clickTrackGenerator.updateOptions(options);
+                // 生成2小节的Click Track作为提示
+                clickTrackGenerator.generateClickTrack(2);
+                const clickTokens = clickTrackGenerator.tokens;
+                // 重置MIDI加载器并添加Click Track作为初始提示
+                midi_loader.reset(true);
+                midi_loader.setClickTrackGenerator(clickTrackGenerator);
+                midi_loader.setShowClickTrack(options.includeInOutput);
+                midi_loader.addEventTokens(clickTokens);
+                // 显示在播放器中
+                update_midi(midi_loader.getMIDIData());
+                // 将Click Track传递给生成器
+                await chat.resetGenerator(clickTokens);
+                log("Added 2 bars of click track as initial prompt<br>");
+            }
+            enableAllButtons();
+        });
+        // 显示/隐藏节拍模式
+        if (showBeatsButton) showBeatsButton.addEventListener("click", function() {
+            if (!clickVisualizer) // 首次点击时创建可视化器
+            clickVisualizer = new (0, _clickTrack.ClickTrackVisualizer)(midi_loader, {
+                bpm: parseInt(bpmSlider.value),
+                pattern: timeSignatureSelect.value.split(',').map(Number),
+                accentFirstBeat: accentFirstBeatCheckbox.checked,
+                timeDivision: 480
+            });
+            // 切换可视化模式
+            clickVisualizer.toggleBeatVisualization();
+            showBeatsButton.textContent = clickVisualizer.visualMode === 'highlight' ? 'Hide Beat Pattern' : 'Show Beat Pattern';
+            // 更新MIDI显示
+            update_midi(clickVisualizer.createVisualization());
+            log(`Beat pattern visualization ${clickVisualizer.visualMode === 'highlight' ? 'enabled' : 'disabled'}<br>`);
+        });
+    }
+    // 在main函数中添加以下调用
+    initializeClickTrack();
+    // 添加重置Click Track设置的辅助函数
+    function resetClickTrackSettings() {
+        // 重置UI控件
+        if (enableClickTrackCheckbox) enableClickTrackCheckbox.checked = false;
+        if (showClickTrackCheckbox) showClickTrackCheckbox.checked = true;
+        if (bpmSlider) bpmSlider.value = "120";
+        if (bpmValue) bpmValue.innerHTML = "120";
+        if (clickStrengthSlider) clickStrengthSlider.value = "3.0";
+        if (clickStrengthValue) clickStrengthValue.innerHTML = "3.0";
+        if (timeSignatureSelect) timeSignatureSelect.value = "4,4";
+        if (accentFirstBeatCheckbox) accentFirstBeatCheckbox.checked = true;
+        // 重置Click Track生成器
+        if (clickTrackGenerator) clickTrackGenerator.updateOptions({
+            bpm: 120,
+            pattern: [
+                4,
+                4
+            ],
+            strength: 3.0,
+            accentFirstBeat: true,
+            timeDivision: 480,
+            includeInOutput: true
+        });
+        // 重置可视化器
+        if (clickVisualizer) {
+            clickVisualizer.setVisualMode('normal');
+            if (showBeatsButton) showBeatsButton.textContent = 'Show Beat Pattern';
+        }
+        // 通知处理器禁用Click Track
+        const logitProcessor = chat.getLogitProcessor();
+        if (logitProcessor && typeof logitProcessor.enableClickTrack === 'function') logitProcessor.enableClickTrack(false);
+        // 移除MIDILoader中的Click Track
+        midi_loader.setClickTrackGenerator(null);
+    }
+    // 修改重置按钮的处理
+    if (resetButton) resetButton.addEventListener("click", async ()=>{
+        log("Reset generator <br>");
+        startButton.disabled = true;
+        pauseButton.disabled = true;
+        generationStopped = true;
+        await chat.stopGenerator();
+        await chat.resetChat();
+        await chat.resetGenerator();
+        midi_loader.reset(true);
+        const midiFileInput = document.getElementById('midiFile');
+        if (midiFileInput) {
+            midiFileInput.value = '';
+            update_midi(selectRandomMidi());
+        }
+        generating = false;
+        savedTokens = undefined;
+        // 调用完整的Click Track重置函数
+        resetClickTrackSettings();
+        readConfigs();
+        startButton.disabled = false;
+        pauseButton.disabled = false;
+    });
     function readConfigs() {
         genConfig = {
             temperature: parseFloat(temperature_value.innerHTML),
@@ -820,6 +1109,12 @@ async function main() {
         if (chat) chat.setEnsembleDensity(ensemble_density);
         const selectedInstruments = getSelectedInstruments();
         if (chat) chat.selectInstrument(selectedInstruments.join(","));
+        // 读取Click Track设置
+        if (enableClickTrackCheckbox && chat) {
+            const clickTrackEnabled = enableClickTrackCheckbox.checked;
+            // 如果启用了Click Track，应用当前设置
+            if (clickTrackEnabled) applyClickTrackSettings();
+        }
     }
     /*************************** Upload MIDI ********************************/ let midiFilePrompt;
     window.addEventListener('DOMContentLoaded', ()=>{
@@ -865,6 +1160,8 @@ async function main() {
         log(`Web-LLM Chat reloaded with model: ${model_id} <br>`);
     });
     /*************************** Init Web-LLM Chat and MIDI visualizer ********************************/ chat = await _musicTransformerTs.initChat(model_id);
+    const trader = await (0, _tradingBarsJs.initTradingFeature)(chat, midi_loader);
+    initializeClickTrack();
     enableAllButtons();
     log(`Web-LLM Chat loaded with model: ${model_id} <br>`);
     let generating = false;
@@ -883,7 +1180,9 @@ async function main() {
         if (generating) return;
         generating = true;
         while(!generationStopped){
-            const tokens = (await chat.chunkGenerate(genConfig)).split(",").map((str)=>parseInt(str));
+            // 使用全局配置或当前配置
+            const configToUse = window.genConfig || genConfig;
+            const tokens = (await chat.chunkGenerate(configToUse)).split(",").map((str)=>parseInt(str));
             console.log("UI: received generated tokens: ");
             console.log(tokens);
             log(await chat.runtimeStatsText() + "<br>");
@@ -918,6 +1217,16 @@ async function main() {
         }
         generating = false;
         savedTokens = undefined;
+        // 重置Click Track设置
+        if (enableClickTrackCheckbox) enableClickTrackCheckbox.checked = false;
+        if (bpmSlider) bpmSlider.value = "120";
+        if (bpmValue) bpmValue.innerHTML = "120";
+        if (clickStrengthSlider) clickStrengthSlider.value = "3.0";
+        if (clickStrengthValue) clickStrengthValue.innerHTML = "3.0";
+        if (timeSignatureSelect) timeSignatureSelect.value = "4,4";
+        if (accentFirstBeatCheckbox) accentFirstBeatCheckbox.checked = true;
+        const logitProcessor = chat.getLogitProcessor();
+        if (logitProcessor && typeof logitProcessor.enableClickTrack === 'function') logitProcessor.enableClickTrack(false);
         readConfigs();
         startButton.disabled = false;
         pauseButton.disabled = false;
@@ -925,7 +1234,7 @@ async function main() {
 }
 main();
 
-},{"@magenta/music/esm/core.js":"kjHHQ","url:./assets/*.mid":"lulYd","./music_transformer.ts":"gGW2y","./midi_loader.ts":"kE6Z8","@magenta/music":"83gUK","./compound_converter.ts":"4GcM3","@tonejs/midi":"hEB1r"}],"kjHHQ":[function(require,module,exports,__globalThis) {
+},{"@magenta/music/esm/core.js":"kjHHQ","url:./assets/*.mid":"lulYd","./music_transformer.ts":"gGW2y","./midi_loader.ts":"kE6Z8","@magenta/music":"83gUK","./compound_converter.ts":"4GcM3","@tonejs/midi":"hEB1r","./trading_bars.js":"at1ZV","./click_track":"iCPQz"}],"kjHHQ":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _index = require("./core/index");
@@ -131931,6 +132240,28 @@ class CustomChatWorkerClient extends _webLlm.ChatWorkerClient {
         };
         await this.getPromise(msg);
     }
+    async enableClickTrack(enable) {
+        const msg = {
+            kind: "customRequest",
+            uuid: crypto.randomUUID(),
+            content: {
+                requestName: "enableClickTrack",
+                requestMessage: enable.toString()
+            }
+        };
+        await this.getPromise(msg);
+    }
+    async updateClickTrack(options) {
+        const msg = {
+            kind: "customRequest",
+            uuid: crypto.randomUUID(),
+            content: {
+                requestName: "updateClickTrack",
+                requestMessage: JSON.stringify(options)
+            }
+        };
+        await this.getPromise(msg);
+    }
     onmessage(event) {
         const msg = event.data;
         switch(msg.kind){
@@ -150084,41 +150415,188 @@ module.exports = function(workerUrl, origin, isESM) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "MIDILoader", ()=>MIDILoader);
-var _midiConverterTs = require("./midi_converter.ts");
+var _compoundConverterTs = require("./compound_converter.ts");
 var _coreJs = require("@magenta/music/esm/core.js");
 class MIDILoader {
     constructor(){
+        this.clickTrackGenerator = null;
+        this.showClickTrack = true;
         this.reset();
     }
     reset(clearPrompt = false) {
         if (clearPrompt) this.prompt = [];
         this.currCompounds = [];
         this.currTime = 0;
+        this.currDataUrl = '';
     }
-    addEventTokens(rawData) {
-        let comp = _midiConverterTs.eventsToCompound(rawData, this.currTime);
+    /**
+   * Set click track generator for this MIDI loader
+   * @param generator The click track generator or null to disable
+   */ setClickTrackGenerator(generator) {
+        this.clickTrackGenerator = generator;
+        // If we have data, re-render to apply changes
+        if (this.currCompounds.length > 0) this.renderMIDI();
+    }
+    /**
+   * Set whether to show the click track in the output
+   * @param show True to include click track in output, false to hide it
+   */ setShowClickTrack(show) {
+        this.showClickTrack = show;
+        // If we have data, re-render to apply changes
+        if (this.currCompounds.length > 0) this.renderMIDI();
+    }
+    /**
+   * Get the current time position in ticks
+   * Useful for determining how many bars of click track to generate
+   */ getCurrentTimePosition() {
+        return this.currTime;
+    }
+    /**
+   * Add new event tokens to the current sequence
+   * @param rawData Array of token events to add
+   */ addEventTokens(rawData) {
+        if (!rawData || rawData.length === 0) return;
+        // Convert tokens to compound format starting from current time
+        let comp = _compoundConverterTs.eventsToCompound(rawData, this.currTime);
+        // Add these compounds to our sequence
         this.currCompounds = [
             ...this.currCompounds,
             ...comp
         ];
-        this.currTime = comp[comp.length - 1][0];
-        console.log("Current generated time: " + this.currTime);
-        this.currDataUrl = _midiConverterTs.compoundToMidi(this.currCompounds);
+        // Update current time to the latest event time
+        if (comp.length > 0) {
+            this.currTime = comp[comp.length - 1][0];
+            console.log("Current generated time: " + this.currTime);
+        }
+        // Render the updated MIDI data
+        this.renderMIDI();
     }
-    setPrompt(rawData) {
-        this.reset();
-        if (rawData.length == 0) return;
-        this.prompt = rawData;
-        this.currCompounds = _midiConverterTs.eventsToCompound(rawData, 0);
-        this.currTime = this.currCompounds[this.currCompounds.length - 1][0];
-        console.log("Current generated time: " + this.currTime);
-        this.currDataUrl = _midiConverterTs.compoundToMidi(this.currCompounds);
+    /**
+   * Filter out click track events from compound data
+   * This looks for percussion notes (instrument 9) that match our click pattern
+   * @param compounds Array of compound events to filter
+   * @returns Filtered array without click track events
+   */ filterClickTrackEvents(compounds) {
+        if (!this.clickTrackGenerator) return compounds;
+        // Get the pattern to identify beats
+        const beatsPerBar = this.clickTrackGenerator.pattern[0];
+        const ticksPerBeat = 480; // Standard MIDI resolution
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        return compounds.filter((note)=>{
+            // Ensure note has enough elements
+            if (note.length < 4) return true;
+            const [time, duration, pitch, instrument] = note;
+            // If it's not a percussion instrument, keep it
+            if (instrument !== 9) return true;
+            // Check if this is a click track note (hi-hat or sidestick at exact beat positions)
+            // For click track, we use closed hi-hat (42) for regular beats and side stick (37) for accented beats
+            if (pitch === 42 || pitch === 37) {
+                // Check if it's at an exact beat position
+                const beatPosition = time % ticksPerBar;
+                const isBeatPosition = beatPosition % ticksPerBeat === 0;
+                // If it's at a beat position, it's likely part of the click track, so filter it out
+                if (isBeatPosition) return false;
+            }
+            return true;
+        });
     }
-    getMIDIData() {
+    /**
+   * Render the MIDI data from compounds, applying click track filtering if needed
+   * @returns The data URL for the MIDI file
+   */ renderMIDI() {
+        let compounds = [
+            ...this.currCompounds
+        ];
+        // If we have a click track generator and should not show click track,
+        // filter out percussion notes that match our click track pattern
+        if (this.clickTrackGenerator && !this.showClickTrack) compounds = this.filterClickTrackEvents(compounds);
+        // Convert compounds to MIDI data URL
+        this.currDataUrl = _compoundConverterTs.compoundToMidi(compounds);
         return this.currDataUrl;
     }
-    async downloadMIDIBlob(filename) {
-        const blob = await _coreJs.urlToBlob(this.currDataUrl);
+    /**
+   * Get the current compounds data
+   * @returns Array of compound events
+   */ getCompounds() {
+        return [
+            ...this.currCompounds
+        ];
+    }
+    /**
+   * Update the MIDI data directly from compounds
+   * @param compounds New compound events to set
+   */ updateFromCompounds(compounds) {
+        this.currCompounds = compounds;
+        this.currTime = compounds.length > 0 ? compounds[compounds.length - 1][0] : 0;
+        this.renderMIDI();
+    }
+    /**
+   * Set prompt tokens and initialize the MIDI data
+   * @param rawData Array of prompt tokens
+   */ setPrompt(rawData) {
+        this.reset();
+        if (!rawData || rawData.length === 0) return;
+        this.prompt = rawData;
+        this.currCompounds = _compoundConverterTs.eventsToCompound(rawData, 0);
+        if (this.currCompounds.length > 0) {
+            this.currTime = this.currCompounds[this.currCompounds.length - 1][0];
+            console.log("Current generated time: " + this.currTime);
+        }
+        this.renderMIDI();
+    }
+    /**
+   * Add click track events to the current MIDI data
+   * This creates a merged MIDI with both the generated content and click track
+   * @param barCount Number of bars of click track to add
+   */ addClickTrack(barCount) {
+        if (!this.clickTrackGenerator) return;
+        // If no bar count specified, calculate how many we need based on current time
+        if (!barCount) {
+            const ticksPerBeat = 480; // Standard MIDI resolution
+            const beatsPerBar = this.clickTrackGenerator.pattern[0];
+            const ticksPerBar = ticksPerBeat * beatsPerBar;
+            barCount = Math.ceil(this.currTime / ticksPerBar) + 2; // Add extra bars
+        }
+        // Generate the click track events
+        this.clickTrackGenerator.generateClickTrack(barCount);
+        // Get click track events as compounds
+        const clickEvents = _compoundConverterTs.eventsToCompound(this.clickTrackGenerator.tokens, 0);
+        // Merge with existing compounds (if showClickTrack is enabled)
+        if (this.showClickTrack) {
+            // Combine existing compounds with click track
+            const allCompounds = [
+                ...this.currCompounds
+            ];
+            // Add click events, but avoid duplicates
+            for (const clickEvent of clickEvents){
+                // Check if this exact click event already exists at this position
+                const exists = allCompounds.some((event)=>event[0] === clickEvent[0] && // Same time
+                    event[1] === clickEvent[1] && // Same duration
+                    event[2] === clickEvent[2] && // Same pitch
+                    event[3] === clickEvent[3] // Same instrument
+                );
+                if (!exists) allCompounds.push(clickEvent);
+            }
+            // Sort by time
+            allCompounds.sort((a, b)=>a[0] - b[0]);
+            // Update compounds and render
+            this.currCompounds = allCompounds;
+            this.renderMIDI();
+        }
+    }
+    /**
+   * Get the MIDI data URL
+   * @returns Data URL for the current MIDI file
+   */ getMIDIData() {
+        // If we need to include click track, make sure it's up to date
+        if (this.clickTrackGenerator && this.showClickTrack) this.addClickTrack();
+        return this.currDataUrl;
+    }
+    /**
+   * Download the current MIDI data as a file
+   * @param filename Base filename (without extension)
+   */ async downloadMIDIBlob(filename) {
+        const blob = await _coreJs.urlToBlob(this.getMIDIData());
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -150130,63 +150608,125 @@ class MIDILoader {
     }
 }
 
-},{"./midi_converter.ts":"iAl7c","@magenta/music/esm/core.js":"kjHHQ","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"iAl7c":[function(require,module,exports,__globalThis) {
+},{"@magenta/music/esm/core.js":"kjHHQ","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./compound_converter.ts":"4GcM3"}],"4GcM3":[function(require,module,exports,__globalThis) {
 /**
- * Convert raw data to notes data.
- * Raw output is a sequence of triplet  time, duration, and note (t, d, n).
+ * Convert MIDI file into compound data.
+ * Compound data is a sequence of triplet time, duration, and note (t, d, n).
  * Note n combines pitch p and instrument k using a single value n = 128k + p.
  */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 /**
- * Convert each triplet in raw data into a note with 5 pieces of info. 
- * Conversion method see github.com/jthickstun/anticipation/blob/main/anticipation/convert.py.
- * Output is a list of list of numbers, where each inner list is a note formatted as 
- * [start, duration, pitch, instrument, velocity]. Start time and duration in unit of seconds.
+ * Take in JSON string, returns a list of list, where each inner list is a compound 
+ * representing one note event.
+ */ parcelHelpers.export(exports, "midiToCompound", ()=>midiToCompound);
+/**
+ * Take in a list of list, where each inner list is a compound representing 
+ * one note event. Process each compound and generate a list of tokens (ints).
+ */ parcelHelpers.export(exports, "compoundToEvents", ()=>compoundToEvents);
+/**
+ * Input is a JSON of a midi file. Upload MIDI at tonejs.github.io/Midi/ 
+ * to see the json string.
+ * Returns an array of numbers, where every triplet represents one note.
+ */ parcelHelpers.export(exports, "midiToEvents", ()=>midiToEvents);
+/**
+ * Convert events tokens back to compound format
+ * This is the reverse operation of compoundToEvents
+ * @param events Array of tokens representing time, duration, note triplets
+ * @param startOffset Starting time offset (for concatenation purposes)
+ * @returns Array of compounds in [time, duration, pitch, instrument] format
  */ parcelHelpers.export(exports, "eventsToCompound", ()=>eventsToCompound);
 parcelHelpers.export(exports, "compoundToMidi", ()=>compoundToMidi);
-var _midiWriterJs = require("midi-writer-js"); // https://grimmdude.com/MidiWriterJS/docs/modules.html
-var _midiWriterJsDefault = parcelHelpers.interopDefault(_midiWriterJs);
 var _musicTransformerConfig = require("./music_transformer_config");
 var _musicTransformerVocab = require("./music_transformer_vocab");
-const NOTE_ON_VELOCITY = 56.25;
-function offset(num) {
-    if (num >= (0, _musicTransformerVocab.CONTROL_OFFSET)) return num - (0, _musicTransformerVocab.CONTROL_OFFSET);
-    return num;
+var _midiWriterJs = require("midi-writer-js"); // https://grimmdude.com/MidiWriterJS/docs/modules.html
+var _midiWriterJsDefault = parcelHelpers.interopDefault(_midiWriterJs);
+function midiToCompound(midiFile) {
+    const midi = JSON.parse(midiFile);
+    const compounds = [];
+    midi.tracks.forEach((track)=>{
+        // 9 reserved for drums (midi = 128)
+        const instrument = track.channel == 9 ? 128 : track.instrument.number;
+        const notes = track.notes;
+        notes.forEach((note)=>{
+            compounds.push([
+                Math.round((0, _musicTransformerConfig.TIME_RESOLUTION) * note.time),
+                Math.round((0, _musicTransformerConfig.TIME_RESOLUTION) * note.duration),
+                note.midi,
+                instrument
+            ]);
+        });
+    });
+    // Sort by start time
+    compounds.sort((a, b)=>{
+        return a[0] - b[0];
+    });
+    return compounds;
 }
-function unpad(tokens) {
-    const newTokens = [];
-    for(let i = 0; i < tokens.length; i += 3){
-        const time = tokens[i];
-        const dur = tokens[i + 1];
-        const note = tokens[i + 2];
-        if (note === (0, _musicTransformerVocab.REST)) continue;
-        newTokens.push(time, dur, note);
+function compoundToEvents(compounds) {
+    const events = [];
+    const start = 0, dur = 1, pitch = 2, instr = 3;
+    for(let i = 0; i < compounds.length; i++){
+        const compound = compounds[i];
+        // Append start time
+        const startTime = (0, _musicTransformerVocab.TIME_OFFSET) + compound[start];
+        events.push(Math.round(startTime));
+        // Get duration
+        var duration = (0, _musicTransformerVocab.DUR_OFFSET);
+        if (compound[dur] == -1) duration += (0, _musicTransformerConfig.TIME_RESOLUTION) / 4;
+        else duration += Math.min((0, _musicTransformerConfig.MAX_DUR) - 1, compound[dur]);
+        events.push(Math.round(duration));
+        // Combine note and instrument
+        var note = (0, _musicTransformerVocab.NOTE_OFFSET);
+        if (compound[pitch] == -1) note += (0, _musicTransformerVocab.SEPARATOR);
+        else note += (0, _musicTransformerConfig.MAX_PITCH) * compound[instr] + compound[pitch];
+        events.push(Math.round(note));
     }
-    return newTokens;
+    return events;
 }
-function eventsToCompound(rawData, start_offset = 0) {
-    const unpadData = unpad(rawData);
-    const notesData = [];
-    /* Iterate through each 3 note triplet. */ for(let i = 0; i < unpadData.length; i += 3){
-        const start = offset(unpadData[i]) + start_offset;
-        const duration = offset(unpadData[i + 1]) - (0, _musicTransformerVocab.DUR_OFFSET);
-        const pitch = (offset(unpadData[i + 2]) - (0, _musicTransformerVocab.NOTE_OFFSET)) % (0, _musicTransformerConfig.MAX_PITCH);
-        const instrument = Math.floor((offset(unpadData[i + 2]) - (0, _musicTransformerVocab.NOTE_OFFSET)) / (0, _musicTransformerConfig.MAX_PITCH));
-        notesData.push([
-            start,
+function midiToEvents(midiFile) {
+    return compoundToEvents(midiToCompound(midiFile));
+}
+function eventsToCompound(events, startOffset = 0) {
+    const compounds = [];
+    // Process each triplet of tokens (time, duration, note)
+    for(let i = 0; i < events.length; i += 3){
+        if (i + 2 >= events.length) break; // Ensure we have a complete triplet
+        // Extract the triplet values
+        const timeToken = events[i];
+        const durationToken = events[i + 1];
+        const noteToken = events[i + 2];
+        // Convert time token back to time value
+        const time = timeToken - (0, _musicTransformerVocab.TIME_OFFSET) + startOffset;
+        // Convert duration token back to duration value
+        const duration = durationToken - (0, _musicTransformerVocab.DUR_OFFSET);
+        // Convert note token back to pitch and instrument
+        if (noteToken === (0, _musicTransformerVocab.NOTE_OFFSET) + (0, _musicTransformerVocab.SEPARATOR)) // This is a rest or special note
+        compounds.push([
+            time,
             duration,
-            pitch,
-            instrument,
-            NOTE_ON_VELOCITY
+            -1,
+            0
         ]);
+        else {
+            // Regular note
+            const noteValue = noteToken - (0, _musicTransformerVocab.NOTE_OFFSET);
+            const instrument = Math.floor(noteValue / (0, _musicTransformerConfig.MAX_PITCH));
+            const pitch = noteValue % (0, _musicTransformerConfig.MAX_PITCH);
+            compounds.push([
+                time,
+                duration,
+                pitch,
+                instrument
+            ]);
+        }
     }
-    return notesData;
+    return compounds;
 }
 function compoundToMidi(notesData) {
     /**
-   * Create one midi track for each instrument.
-   * Output map key/pair set: <Instrument midi class, track for that instrument >.
-   */ var num_tracks = 0;
+     * Create one midi track for each instrument.
+     * Output map key/pair set: <Instrument midi class, track for that instrument >.
+     */ var num_tracks = 0;
     const instruMap = new Map();
     for(let i = 0; i < notesData.length; i++){
         const [start, duration, pitch, instrument, velocity] = notesData[i];
@@ -150231,7 +150771,159 @@ function compoundToMidi(notesData) {
     return writer.dataUri();
 }
 
-},{"midi-writer-js":"9Wc1q","./music_transformer_config":"55aRM","./music_transformer_vocab":"2xPTu","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"9Wc1q":[function(require,module,exports,__globalThis) {
+},{"./music_transformer_config":"55aRM","./music_transformer_vocab":"2xPTu","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","midi-writer-js":"9Wc1q"}],"55aRM":[function(require,module,exports,__globalThis) {
+/** 
+ * Global configuration for anticipatory infilling models.
+ * 
+ * From https://github.com/jthickstun/anticipation/blob/main/anticipation/sample.py.
+*/ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "CONTEXT_SIZE", ()=>CONTEXT_SIZE);
+parcelHelpers.export(exports, "EVENT_SIZE", ()=>EVENT_SIZE);
+parcelHelpers.export(exports, "M", ()=>M);
+parcelHelpers.export(exports, "DELTA", ()=>DELTA);
+parcelHelpers.export(exports, "MAX_TIME_IN_SECONDS", ()=>MAX_TIME_IN_SECONDS);
+parcelHelpers.export(exports, "MAX_DURATION_IN_SECONDS", ()=>MAX_DURATION_IN_SECONDS);
+parcelHelpers.export(exports, "TIME_RESOLUTION", ()=>TIME_RESOLUTION);
+parcelHelpers.export(exports, "MAX_PITCH", ()=>MAX_PITCH);
+parcelHelpers.export(exports, "MAX_INSTR", ()=>MAX_INSTR);
+parcelHelpers.export(exports, "MAX_NOTE", ()=>MAX_NOTE);
+parcelHelpers.export(exports, "MAX_INTERARRIVAL_IN_SECONDS", ()=>MAX_INTERARRIVAL_IN_SECONDS);
+parcelHelpers.export(exports, "PREPROC_WORKERS", ()=>PREPROC_WORKERS);
+parcelHelpers.export(exports, "COMPOUND_SIZE", ()=>COMPOUND_SIZE);
+parcelHelpers.export(exports, "MAX_TRACK_INSTR", ()=>MAX_TRACK_INSTR);
+parcelHelpers.export(exports, "MAX_TRACK_TIME_IN_SECONDS", ()=>MAX_TRACK_TIME_IN_SECONDS);
+parcelHelpers.export(exports, "MIN_TRACK_TIME_IN_SECONDS", ()=>MIN_TRACK_TIME_IN_SECONDS);
+parcelHelpers.export(exports, "MIN_TRACK_EVENTS", ()=>MIN_TRACK_EVENTS);
+parcelHelpers.export(exports, "LAKH_SPLITS", ()=>LAKH_SPLITS);
+parcelHelpers.export(exports, "LAKH_VALID", ()=>LAKH_VALID);
+parcelHelpers.export(exports, "LAKH_TEST", ()=>LAKH_TEST);
+parcelHelpers.export(exports, "MAX_TIME", ()=>MAX_TIME);
+parcelHelpers.export(exports, "MAX_DUR", ()=>MAX_DUR);
+parcelHelpers.export(exports, "MAX_INTERARRIVAL", ()=>MAX_INTERARRIVAL);
+const CONTEXT_SIZE = 1024 // model context
+;
+const EVENT_SIZE = 3 // each event/control is encoded as 3 tokens
+;
+const M = 341 // model context (1024 = 1 + EVENT_SIZE*M)
+;
+const DELTA = 5 // anticipation time in seconds
+;
+if (CONTEXT_SIZE != 1 + EVENT_SIZE * M) throw Error;
+const MAX_TIME_IN_SECONDS = 100 // exclude very long training sequences
+;
+const MAX_DURATION_IN_SECONDS = 10 // maximum duration of a note
+;
+const TIME_RESOLUTION = 100 // 10ms time resolution = 100 bins/second
+;
+const MAX_PITCH = 128 // 128 MIDI pitches
+;
+const MAX_INSTR = 129 // 129 MIDI instruments (128 + drums)
+;
+const MAX_NOTE = MAX_PITCH * MAX_INSTR // note = pitch x instrument
+;
+const MAX_INTERARRIVAL_IN_SECONDS = 10 // maximum interarrival time (for MIDI-like encoding)
+;
+const PREPROC_WORKERS = 16;
+const COMPOUND_SIZE = 5 // event size in the intermediate compound tokenization
+;
+const MAX_TRACK_INSTR = 16 // exclude tracks with large numbers of instruments
+;
+const MAX_TRACK_TIME_IN_SECONDS = 3600 // exclude very long tracks (longer than 1 hour)
+;
+const MIN_TRACK_TIME_IN_SECONDS = 10 // exclude very short tracks (less than 10 seconds)
+;
+const MIN_TRACK_EVENTS = 100 // exclude very short tracks (less than 100 events)
+;
+const LAKH_SPLITS = [
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f'
+];
+const LAKH_VALID = [
+    'e'
+];
+const LAKH_TEST = [
+    'f'
+];
+const MAX_TIME = TIME_RESOLUTION * MAX_TIME_IN_SECONDS;
+const MAX_DUR = TIME_RESOLUTION * MAX_DURATION_IN_SECONDS;
+const MAX_INTERARRIVAL = TIME_RESOLUTION * MAX_INTERARRIVAL_IN_SECONDS;
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"2xPTu":[function(require,module,exports,__globalThis) {
+/**
+ * The vocabularies used for arrival-time and interarrival-time encodings.
+ * 
+ * From https://github.com/jthickstun/anticipation/blob/main/anticipation/sample.py.
+ */ // training sequence vocab
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "EVENT_OFFSET", ()=>EVENT_OFFSET);
+parcelHelpers.export(exports, "TIME_OFFSET", ()=>TIME_OFFSET);
+parcelHelpers.export(exports, "DUR_OFFSET", ()=>DUR_OFFSET);
+parcelHelpers.export(exports, "NOTE_OFFSET", ()=>NOTE_OFFSET);
+parcelHelpers.export(exports, "REST", ()=>REST);
+parcelHelpers.export(exports, "CONTROL_OFFSET", ()=>CONTROL_OFFSET);
+parcelHelpers.export(exports, "ATIME_OFFSET", ()=>ATIME_OFFSET);
+parcelHelpers.export(exports, "ADUR_OFFSET", ()=>ADUR_OFFSET);
+parcelHelpers.export(exports, "ANOTE_OFFSET", ()=>ANOTE_OFFSET);
+parcelHelpers.export(exports, "SPECIAL_OFFSET", ()=>SPECIAL_OFFSET);
+parcelHelpers.export(exports, "SEPARATOR", ()=>SEPARATOR);
+parcelHelpers.export(exports, "AUTOREGRESS", ()=>AUTOREGRESS);
+parcelHelpers.export(exports, "ANTICIPATE", ()=>ANTICIPATE);
+parcelHelpers.export(exports, "VOCAB_SIZE", ()=>VOCAB_SIZE);
+parcelHelpers.export(exports, "MIDI_TIME_OFFSET", ()=>MIDI_TIME_OFFSET);
+parcelHelpers.export(exports, "MIDI_START_OFFSET", ()=>MIDI_START_OFFSET);
+parcelHelpers.export(exports, "MIDI_END_OFFSET", ()=>MIDI_END_OFFSET);
+parcelHelpers.export(exports, "MIDI_SEPARATOR", ()=>MIDI_SEPARATOR);
+parcelHelpers.export(exports, "MIDI_VOCAB_SIZE", ()=>MIDI_VOCAB_SIZE);
+var _musicTransformerConfig = require("./music_transformer_config");
+const EVENT_OFFSET = 0;
+const TIME_OFFSET = EVENT_OFFSET // 0
+;
+const DUR_OFFSET = TIME_OFFSET + _musicTransformerConfig.MAX_TIME // 10000
+;
+const NOTE_OFFSET = DUR_OFFSET + _musicTransformerConfig.MAX_DUR // 11000
+;
+const REST = NOTE_OFFSET + _musicTransformerConfig.MAX_NOTE // 27512
+;
+const CONTROL_OFFSET = NOTE_OFFSET + _musicTransformerConfig.MAX_NOTE + 1 // 27513
+;
+const ATIME_OFFSET = CONTROL_OFFSET + 0 // 27513
+;
+const ADUR_OFFSET = ATIME_OFFSET + _musicTransformerConfig.MAX_TIME // 37513
+;
+const ANOTE_OFFSET = ADUR_OFFSET + _musicTransformerConfig.MAX_DUR // 38513
+;
+const SPECIAL_OFFSET = ANOTE_OFFSET + _musicTransformerConfig.MAX_NOTE // 55025
+;
+const SEPARATOR = SPECIAL_OFFSET;
+const AUTOREGRESS = SPECIAL_OFFSET + 1 // 55026
+;
+const ANTICIPATE = SPECIAL_OFFSET + 2 // 55027
+;
+const VOCAB_SIZE = ANTICIPATE + 1 // 55028
+;
+const MIDI_TIME_OFFSET = 0;
+const MIDI_START_OFFSET = MIDI_TIME_OFFSET + _musicTransformerConfig.MAX_INTERARRIVAL;
+const MIDI_END_OFFSET = MIDI_START_OFFSET + _musicTransformerConfig.MAX_NOTE;
+const MIDI_SEPARATOR = MIDI_END_OFFSET + _musicTransformerConfig.MAX_NOTE;
+const MIDI_VOCAB_SIZE = MIDI_SEPARATOR + 1;
+
+},{"./music_transformer_config":"55aRM","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"9Wc1q":[function(require,module,exports,__globalThis) {
 var Buffer = require("26dd28a03d07081e").Buffer;
 var process = require("ef0e3dc56f127e68");
 'use strict';
@@ -151563,159 +152255,7 @@ var main = {
 };
 module.exports = main;
 
-},{"26dd28a03d07081e":"bCaf4","ef0e3dc56f127e68":"euskh"}],"55aRM":[function(require,module,exports,__globalThis) {
-/** 
- * Global configuration for anticipatory infilling models.
- * 
- * From https://github.com/jthickstun/anticipation/blob/main/anticipation/sample.py.
-*/ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "CONTEXT_SIZE", ()=>CONTEXT_SIZE);
-parcelHelpers.export(exports, "EVENT_SIZE", ()=>EVENT_SIZE);
-parcelHelpers.export(exports, "M", ()=>M);
-parcelHelpers.export(exports, "DELTA", ()=>DELTA);
-parcelHelpers.export(exports, "MAX_TIME_IN_SECONDS", ()=>MAX_TIME_IN_SECONDS);
-parcelHelpers.export(exports, "MAX_DURATION_IN_SECONDS", ()=>MAX_DURATION_IN_SECONDS);
-parcelHelpers.export(exports, "TIME_RESOLUTION", ()=>TIME_RESOLUTION);
-parcelHelpers.export(exports, "MAX_PITCH", ()=>MAX_PITCH);
-parcelHelpers.export(exports, "MAX_INSTR", ()=>MAX_INSTR);
-parcelHelpers.export(exports, "MAX_NOTE", ()=>MAX_NOTE);
-parcelHelpers.export(exports, "MAX_INTERARRIVAL_IN_SECONDS", ()=>MAX_INTERARRIVAL_IN_SECONDS);
-parcelHelpers.export(exports, "PREPROC_WORKERS", ()=>PREPROC_WORKERS);
-parcelHelpers.export(exports, "COMPOUND_SIZE", ()=>COMPOUND_SIZE);
-parcelHelpers.export(exports, "MAX_TRACK_INSTR", ()=>MAX_TRACK_INSTR);
-parcelHelpers.export(exports, "MAX_TRACK_TIME_IN_SECONDS", ()=>MAX_TRACK_TIME_IN_SECONDS);
-parcelHelpers.export(exports, "MIN_TRACK_TIME_IN_SECONDS", ()=>MIN_TRACK_TIME_IN_SECONDS);
-parcelHelpers.export(exports, "MIN_TRACK_EVENTS", ()=>MIN_TRACK_EVENTS);
-parcelHelpers.export(exports, "LAKH_SPLITS", ()=>LAKH_SPLITS);
-parcelHelpers.export(exports, "LAKH_VALID", ()=>LAKH_VALID);
-parcelHelpers.export(exports, "LAKH_TEST", ()=>LAKH_TEST);
-parcelHelpers.export(exports, "MAX_TIME", ()=>MAX_TIME);
-parcelHelpers.export(exports, "MAX_DUR", ()=>MAX_DUR);
-parcelHelpers.export(exports, "MAX_INTERARRIVAL", ()=>MAX_INTERARRIVAL);
-const CONTEXT_SIZE = 1024 // model context
-;
-const EVENT_SIZE = 3 // each event/control is encoded as 3 tokens
-;
-const M = 341 // model context (1024 = 1 + EVENT_SIZE*M)
-;
-const DELTA = 5 // anticipation time in seconds
-;
-if (CONTEXT_SIZE != 1 + EVENT_SIZE * M) throw Error;
-const MAX_TIME_IN_SECONDS = 100 // exclude very long training sequences
-;
-const MAX_DURATION_IN_SECONDS = 10 // maximum duration of a note
-;
-const TIME_RESOLUTION = 100 // 10ms time resolution = 100 bins/second
-;
-const MAX_PITCH = 128 // 128 MIDI pitches
-;
-const MAX_INSTR = 129 // 129 MIDI instruments (128 + drums)
-;
-const MAX_NOTE = MAX_PITCH * MAX_INSTR // note = pitch x instrument
-;
-const MAX_INTERARRIVAL_IN_SECONDS = 10 // maximum interarrival time (for MIDI-like encoding)
-;
-const PREPROC_WORKERS = 16;
-const COMPOUND_SIZE = 5 // event size in the intermediate compound tokenization
-;
-const MAX_TRACK_INSTR = 16 // exclude tracks with large numbers of instruments
-;
-const MAX_TRACK_TIME_IN_SECONDS = 3600 // exclude very long tracks (longer than 1 hour)
-;
-const MIN_TRACK_TIME_IN_SECONDS = 10 // exclude very short tracks (less than 10 seconds)
-;
-const MIN_TRACK_EVENTS = 100 // exclude very short tracks (less than 100 events)
-;
-const LAKH_SPLITS = [
-    '0',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    'a',
-    'b',
-    'c',
-    'd',
-    'e',
-    'f'
-];
-const LAKH_VALID = [
-    'e'
-];
-const LAKH_TEST = [
-    'f'
-];
-const MAX_TIME = TIME_RESOLUTION * MAX_TIME_IN_SECONDS;
-const MAX_DUR = TIME_RESOLUTION * MAX_DURATION_IN_SECONDS;
-const MAX_INTERARRIVAL = TIME_RESOLUTION * MAX_INTERARRIVAL_IN_SECONDS;
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"2xPTu":[function(require,module,exports,__globalThis) {
-/**
- * The vocabularies used for arrival-time and interarrival-time encodings.
- * 
- * From https://github.com/jthickstun/anticipation/blob/main/anticipation/sample.py.
- */ // training sequence vocab
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "EVENT_OFFSET", ()=>EVENT_OFFSET);
-parcelHelpers.export(exports, "TIME_OFFSET", ()=>TIME_OFFSET);
-parcelHelpers.export(exports, "DUR_OFFSET", ()=>DUR_OFFSET);
-parcelHelpers.export(exports, "NOTE_OFFSET", ()=>NOTE_OFFSET);
-parcelHelpers.export(exports, "REST", ()=>REST);
-parcelHelpers.export(exports, "CONTROL_OFFSET", ()=>CONTROL_OFFSET);
-parcelHelpers.export(exports, "ATIME_OFFSET", ()=>ATIME_OFFSET);
-parcelHelpers.export(exports, "ADUR_OFFSET", ()=>ADUR_OFFSET);
-parcelHelpers.export(exports, "ANOTE_OFFSET", ()=>ANOTE_OFFSET);
-parcelHelpers.export(exports, "SPECIAL_OFFSET", ()=>SPECIAL_OFFSET);
-parcelHelpers.export(exports, "SEPARATOR", ()=>SEPARATOR);
-parcelHelpers.export(exports, "AUTOREGRESS", ()=>AUTOREGRESS);
-parcelHelpers.export(exports, "ANTICIPATE", ()=>ANTICIPATE);
-parcelHelpers.export(exports, "VOCAB_SIZE", ()=>VOCAB_SIZE);
-parcelHelpers.export(exports, "MIDI_TIME_OFFSET", ()=>MIDI_TIME_OFFSET);
-parcelHelpers.export(exports, "MIDI_START_OFFSET", ()=>MIDI_START_OFFSET);
-parcelHelpers.export(exports, "MIDI_END_OFFSET", ()=>MIDI_END_OFFSET);
-parcelHelpers.export(exports, "MIDI_SEPARATOR", ()=>MIDI_SEPARATOR);
-parcelHelpers.export(exports, "MIDI_VOCAB_SIZE", ()=>MIDI_VOCAB_SIZE);
-var _musicTransformerConfig = require("./music_transformer_config");
-const EVENT_OFFSET = 0;
-const TIME_OFFSET = EVENT_OFFSET // 0
-;
-const DUR_OFFSET = TIME_OFFSET + _musicTransformerConfig.MAX_TIME // 10000
-;
-const NOTE_OFFSET = DUR_OFFSET + _musicTransformerConfig.MAX_DUR // 11000
-;
-const REST = NOTE_OFFSET + _musicTransformerConfig.MAX_NOTE // 27512
-;
-const CONTROL_OFFSET = NOTE_OFFSET + _musicTransformerConfig.MAX_NOTE + 1 // 27513
-;
-const ATIME_OFFSET = CONTROL_OFFSET + 0 // 27513
-;
-const ADUR_OFFSET = ATIME_OFFSET + _musicTransformerConfig.MAX_TIME // 37513
-;
-const ANOTE_OFFSET = ADUR_OFFSET + _musicTransformerConfig.MAX_DUR // 38513
-;
-const SPECIAL_OFFSET = ANOTE_OFFSET + _musicTransformerConfig.MAX_NOTE // 55025
-;
-const SEPARATOR = SPECIAL_OFFSET;
-const AUTOREGRESS = SPECIAL_OFFSET + 1 // 55026
-;
-const ANTICIPATE = SPECIAL_OFFSET + 2 // 55027
-;
-const VOCAB_SIZE = ANTICIPATE + 1 // 55028
-;
-const MIDI_TIME_OFFSET = 0;
-const MIDI_START_OFFSET = MIDI_TIME_OFFSET + _musicTransformerConfig.MAX_INTERARRIVAL;
-const MIDI_END_OFFSET = MIDI_START_OFFSET + _musicTransformerConfig.MAX_NOTE;
-const MIDI_SEPARATOR = MIDI_END_OFFSET + _musicTransformerConfig.MAX_NOTE;
-const MIDI_VOCAB_SIZE = MIDI_SEPARATOR + 1;
-
-},{"./music_transformer_config":"55aRM","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"83gUK":[function(require,module,exports,__globalThis) {
+},{"26dd28a03d07081e":"bCaf4","ef0e3dc56f127e68":"euskh"}],"83gUK":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "tf", ()=>_tfjs);
@@ -172576,75 +173116,803 @@ function convertFrameToSecs(frameLength) {
     return frameLength / (0, _spice.MODEL_FRAME_RATE);
 }
 
-},{"@tensorflow/tfjs":"bzVlO","../core/audio_utils":"6Z92T","../spice/pitch_utils":"aIRu3","../spice/spice":"1ZO5O","./constants":"7WPq9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"4GcM3":[function(require,module,exports,__globalThis) {
-/**
- * Convert MIDI file into compound data.
- * Compound data is a sequence of triplet time, duration, and note (t, d, n).
- * Note n combines pitch p and instrument k using a single value n = 128k + p.
- */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+},{"@tensorflow/tfjs":"bzVlO","../core/audio_utils":"6Z92T","../spice/pitch_utils":"aIRu3","../spice/spice":"1ZO5O","./constants":"7WPq9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"at1ZV":[function(require,module,exports,__globalThis) {
+// trading_bars.js
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-/**
- * Take in JSON string, returns a list of list, where each inner list is a compound 
- * representing one note event.
- */ parcelHelpers.export(exports, "midiToCompound", ()=>midiToCompound);
-/**
- * Take in a list of list, where each inner list is a compound representing 
- * one note event. Process each compound and generate a list of tokens (ints).
- */ parcelHelpers.export(exports, "compoundToEvents", ()=>compoundToEvents);
-/**
- * Input is a JSON of a midi file. Upload MIDI at tonejs.github.io/Midi/ 
- * to see the json string.
- * Returns an array of numbers, where every triplet represents one note.
- */ parcelHelpers.export(exports, "midiToEvents", ()=>midiToEvents);
-var _musicTransformerConfig = require("./music_transformer_config");
-var _musicTransformerVocab = require("./music_transformer_vocab");
-function midiToCompound(midiFile) {
-    const midi = JSON.parse(midiFile);
-    const compounds = [];
-    midi.tracks.forEach((track)=>{
-        // 9 reserved for drums (midi = 128)
-        const instrument = track.channel == 9 ? 128 : track.instrument.number;
-        const notes = track.notes;
-        notes.forEach((note)=>{
-            compounds.push([
-                Math.round((0, _musicTransformerConfig.TIME_RESOLUTION) * note.time),
-                Math.round((0, _musicTransformerConfig.TIME_RESOLUTION) * note.duration),
-                note.midi,
-                instrument
-            ]);
-        });
-    });
-    // Sort by start time
-    compounds.sort((a, b)=>{
-        return a[0] - b[0];
-    });
-    return compounds;
-}
-function compoundToEvents(compounds) {
-    const events = [];
-    const start = 0, dur = 1, pitch = 2, instr = 3;
-    for(let i = 0; i < compounds.length; i++){
-        const compound = compounds[i];
-        // Append start time
-        const startTime = (0, _musicTransformerVocab.TIME_OFFSET) + compound[start];
-        events.push(Math.round(startTime));
-        // Get duration
-        var duration = (0, _musicTransformerVocab.DUR_OFFSET);
-        if (compound[dur] == -1) duration += (0, _musicTransformerConfig.TIME_RESOLUTION) / 4;
-        else duration += Math.min((0, _musicTransformerConfig.MAX_DUR) - 1, compound[dur]);
-        events.push(Math.round(duration));
-        // Combine note and instrument
-        var note = (0, _musicTransformerVocab.NOTE_OFFSET);
-        if (compound[pitch] == -1) note += (0, _musicTransformerVocab.SEPARATOR);
-        else note += (0, _musicTransformerConfig.MAX_PITCH) * compound[instr] + compound[pitch];
-        events.push(Math.round(note));
+// 导出初始化函数
+parcelHelpers.export(exports, "initTradingFeature", ()=>initTradingFeature);
+var _midi = require("@tonejs/midi");
+var _compoundConverterTs = require("./compound_converter.ts");
+class MusicTrader {
+    constructor(chat, midiLoader){
+        this.chat = chat;
+        this.midiLoader = midiLoader;
+        this.isTrading = false;
+        this.barsPerTrade = 8;
+        this.currentTrader = 'human'; // 'human' 或 'ai'
+        this.tradingStyle = 'mimic';
+        this.tradingSession = [];
+        this.ticksPerBar = 1920; // 默认值，将从MIDI中计算
+        this.lastBarEndTime = 0;
+    // 初始化时不调用calculateTicksPerBar，等待有数据时再调用
     }
-    return events;
+    /**
+   * Calculate the maximum number of tokens that would represent 8 bars
+   * @param {number} barCount - Number of bars to generate
+   * @returns {number} Maximum number of tokens for the specified bars
+   */ calculateMaxTokensForBars(barCount) {
+        // This method needs to be implemented based on your specific token-to-bar mapping
+        // The implementation depends on how tokens relate to musical events
+        // Hypothetical implementation:
+        // Assumptions:
+        // - Each bar might have a certain number of base tokens
+        // - Additional tokens for variations, articulations, etc.
+        const baseTokensPerBar = 50; // Estimated base tokens per bar
+        const variationTokensPerBar = 20; // Additional tokens for variations
+        // Calculate total maximum tokens for specified bars
+        const maxTokens = (baseTokensPerBar + variationTokensPerBar) * barCount;
+        console.log(`Calculating max tokens for ${barCount} bars:`, `Base tokens: ${baseTokensPerBar * barCount}, 
+              Variation tokens: ${variationTokensPerBar * barCount}, 
+              Total: ${maxTokens}`);
+        return maxTokens;
+    }
+    /**
+           * Truncate tokens to match specified bar count
+           * @param {number[]} tokens - Generated tokens
+           * @param {number} barCount - Number of bars to keep
+           * @returns {number[]} Truncated tokens
+           */ truncateTokensToBarCount(tokens, barCount) {
+        const maxTokens = this.calculateMaxTokensForBars(barCount);
+        // Truncate tokens
+        const truncatedTokens = tokens.slice(0, maxTokens);
+        // Logging for diagnostics
+        console.log(`Token truncation details:
+              Original token count: ${tokens.length}
+              Max tokens for ${barCount} bars: ${maxTokens}
+              Truncated token count: ${truncatedTokens.length}`);
+        // Validate truncation
+        if (truncatedTokens.length < maxTokens) console.warn(`Warning: Unable to generate full ${barCount} bars. 
+                Generated tokens may be insufficient.`);
+        return truncatedTokens;
+    }
+    async calculateTicksPerBar() {
+        // 获取当前MIDI数据
+        const midiDataUrl = this.midiLoader.getMIDIData();
+        if (!midiDataUrl) {
+            console.log("No MIDI data available for tick calculation");
+            return;
+        }
+        try {
+            // 从data URI中获取MIDI数据
+            const response = await fetch(midiDataUrl);
+            const blob = await response.blob();
+            const midi = await (0, _midi.Midi).fromUrl(URL.createObjectURL(blob));
+            // 从MIDI头获取时间签名和PPQ（每四分音符的tick数）
+            const timeSignature = midi.header.timeSignatures[0] || {
+                timeSignature: [
+                    4,
+                    4
+                ]
+            };
+            const ticksPerBeat = midi.header.ppq;
+            this.ticksPerBar = ticksPerBeat * timeSignature.timeSignature[0];
+            console.log(`Successfully calculated ticks per bar: ${this.ticksPerBar}`);
+            return midi;
+        } catch (error) {
+            console.error("Error calculating ticks per bar:", error);
+            this.ticksPerBar = 1920; // 默认值 (480 ticks/beat * 4 beats)
+            return null;
+        }
+    }
+    async startTradingSession() {
+        this.isTrading = true;
+        this.tradingSession = [];
+        this.currentTrader = 'human';
+        this.lastBarEndTime = 0;
+        // 如果已经有MIDI数据，将其视为第一个人类部分
+        const midiDataUrl = this.midiLoader.getMIDIData();
+        if (midiDataUrl) {
+            document.getElementById('tradingStatus').textContent = 'Analyzing MIDI data...';
+            try {
+                // 计算每小节的tick数，并获取MIDI对象
+                const midi = await this.calculateTicksPerBar();
+                if (!midi) {
+                    document.getElementById('tradingStatus').textContent = 'Error analyzing MIDI. Using default settings.';
+                    return;
+                }
+                // 找到最后一个音符的结束时间
+                let lastTime = 0;
+                midi.tracks.forEach((track)=>{
+                    track.notes.forEach((note)=>{
+                        lastTime = Math.max(lastTime, note.ticks + note.durationTicks);
+                    });
+                });
+                // 将结束时间调整到小节边界
+                const barCount = Math.ceil(lastTime / this.ticksPerBar);
+                this.lastBarEndTime = barCount * this.ticksPerBar;
+                // 将初始的人类部分添加到交易会话
+                this.tradingSession.push({
+                    trader: 'human',
+                    startTime: 0,
+                    endTime: this.lastBarEndTime,
+                    barCount: barCount,
+                    midiData: midiDataUrl,
+                    compounds: this.midiLoader.currCompounds,
+                    time: this.midiLoader.currTime
+                });
+                document.getElementById('tradingStatus').textContent = `Human part recorded (${barCount} bars). Ready for AI turn.`;
+                document.getElementById('generateAIPartButton').disabled = false;
+                document.getElementById('addHumanPartButton').disabled = true;
+            } catch (error) {
+                console.error("Error analyzing MIDI for trading:", error);
+                document.getElementById('tradingStatus').textContent = 'Error analyzing MIDI. Try uploading a different file.';
+            }
+        } else {
+            document.getElementById('tradingStatus').textContent = 'No MIDI data. Please upload or record your part first.';
+            document.getElementById('addHumanPartButton').disabled = false;
+            document.getElementById('generateAIPartButton').disabled = true;
+        }
+    }
+    async generateAIPart() {
+        if (!this.isTrading) return;
+        const barsPerTrade = parseInt(document.getElementById('barsPerTrade').value);
+        const tradingStyle = document.getElementById('tradingStyle').value;
+        // 获取当前生成配置
+        document.getElementById('tradingStatus').textContent = 'AI is generating...';
+        this.currentTrader = 'ai';
+        // 根据选择的风格设置交易风格参数
+        this.setTradingStyleParameters(tradingStyle);
+        try {
+            // 记住当前的状态
+            const currentTime = this.midiLoader.currTime;
+            const currentCompounds = [
+                ...this.midiLoader.currCompounds
+            ];
+            const temperature = parseFloat(document.getElementById("temperature-value").innerHTML);
+            const top_p = parseFloat(document.getElementById("topP-value").innerHTML);
+            const frequency_penalty = parseFloat(document.getElementById("frequencyPenalty-value").innerHTML);
+            // 根据读取的值，设置全局生成参数
+            window.genConfig = {
+                temperature: temperature,
+                top_p: top_p,
+                frequency_penalty: frequency_penalty
+            };
+            // 生成新内容
+            const generatedTokensStr = await this.chat.chunkGenerate();
+            const generatedTokens = generatedTokensStr.split(',').map((t)=>parseInt(t));
+            console.log("Generated tokens:", generatedTokens.length);
+            // Truncate tokens to 8 bars
+            const truncatedTokens = this.truncateTokensToBarCount(generatedTokens, barsPerTrade);
+            // 先添加令牌到MIDILoader
+            this.midiLoader.addEventTokens(truncatedTokens);
+            console.log("Added tokens to MIDILoader");
+            // 然后获取更新后的MIDI数据
+            const newMidiDataUrl = this.midiLoader.getMIDIData();
+            console.log("Got new MIDI data URL, length:", newMidiDataUrl.length);
+            console.log("Updating MIDI player with new data...");
+            if (typeof window.update_midi === 'function') {
+                await window.update_midi(newMidiDataUrl);
+                console.log("Called window.update_midi successfully");
+            } else console.error("window.update_midi is not a function!");
+            // 计算新生成内容的小节数
+            const barsDuration = barsPerTrade * this.ticksPerBar;
+            // 将AI部分添加到交易会话
+            this.tradingSession.push({
+                trader: 'ai',
+                startTime: this.lastBarEndTime,
+                endTime: this.lastBarEndTime + barsDuration,
+                barCount: barsPerTrade,
+                midiData: newMidiDataUrl,
+                tokens: generatedTokens,
+                compounds: this.midiLoader.currCompounds,
+                time: this.midiLoader.currTime
+            });
+            // 更新最后的小节结束时间
+            this.lastBarEndTime += barsDuration;
+            // 更新UI
+            document.getElementById('tradingStatus').textContent = `AI part generated (${barsPerTrade} bars). ${this.tradingSession.length} parts in session.`;
+            document.getElementById('generateAIPartButton').disabled = true;
+            document.getElementById('addHumanPartButton').disabled = false;
+            // 更新MIDI播放器
+            await window.update_midi(newMidiDataUrl);
+            // 切换交易者
+            this.currentTrader = 'human';
+        } catch (error) {
+            console.error("Error generating AI part:", error);
+            document.getElementById('tradingStatus').textContent = 'Error generating AI part.';
+        }
+    }
+    async addHumanPart() {
+        // 触发文件上传
+        document.getElementById('tradingStatus').textContent = 'Upload your MIDI response...';
+        document.getElementById('midiFile').click();
+    }
+    async processHumanMidiUpload(file) {
+        if (!this.isTrading) return;
+        try {
+            // 保存当前状态
+            const prevMidiData = this.midiLoader.getMIDIData();
+            const prevCompounds = [
+                ...this.midiLoader.currCompounds
+            ];
+            const prevTime = this.midiLoader.currTime;
+            // 加载新的MIDI文件
+            const tokens = await window.loadMidiTokens(file);
+            // 从URL获取并解析MIDI
+            const midi = await (0, _midi.Midi).fromUrl(URL.createObjectURL(file));
+            // 计算小节数
+            let lastTime = 0;
+            midi.tracks.forEach((track)=>{
+                track.notes.forEach((note)=>{
+                    lastTime = Math.max(lastTime, note.ticks + note.durationTicks);
+                });
+            });
+            const barCount = Math.ceil(lastTime / this.ticksPerBar);
+            // 添加到交易会话
+            this.tradingSession.push({
+                trader: 'human',
+                startTime: this.lastBarEndTime,
+                endTime: this.lastBarEndTime + barCount * this.ticksPerBar,
+                barCount: barCount,
+                midiData: this.midiLoader.getMIDIData(),
+                tokens: tokens,
+                compounds: this.midiLoader.currCompounds,
+                time: this.midiLoader.currTime
+            });
+            // 更新最后的小节结束时间
+            this.lastBarEndTime += barCount * this.ticksPerBar;
+            // 更新UI
+            document.getElementById('tradingStatus').textContent = `Human part added (${barCount} bars). ${this.tradingSession.length} parts in session.`;
+            document.getElementById('generateAIPartButton').disabled = false;
+            document.getElementById('addHumanPartButton').disabled = true;
+            // 切换交易者
+            this.currentTrader = 'ai';
+        } catch (error) {
+            console.error("Error processing human MIDI:", error);
+            document.getElementById('tradingStatus').textContent = 'Error processing your MIDI.';
+        }
+    }
+    setTradingStyleParameters(style) {
+        // 根据交易风格调整生成参数
+        const temperature = document.getElementById("temperature");
+        const topP = document.getElementById("topP");
+        const frequencyPenalty = document.getElementById("frequencyPenalty");
+        const ensembleDensity = document.getElementById("ensembleDensity");
+        switch(style){
+            case 'mimic':
+                // 较低的温度以更忠实地模仿
+                temperature.value = "0.7";
+                topP.value = "0.9";
+                frequencyPenalty.value = "0.2";
+                // 保持类似的密度
+                ensembleDensity.value = document.getElementById("ensembleDensity-value").innerHTML;
+                break;
+            case 'contrast':
+                // 较高的温度以增加变化
+                temperature.value = "1.2";
+                topP.value = "1.0";
+                frequencyPenalty.value = "1.0";
+                // 改变密度以形成对比
+                const currentDensity = parseFloat(document.getElementById("ensembleDensity-value").innerHTML);
+                ensembleDensity.value = Math.min(Math.max(0, 1.0 - currentDensity), 1.0).toString();
+                break;
+            case 'develop':
+                // 平衡的参数以进行主题发展
+                temperature.value = "0.9";
+                topP.value = "0.9";
+                frequencyPenalty.value = "0.5";
+                // 稍微增加密度以便发展
+                const density = parseFloat(document.getElementById("ensembleDensity-value").innerHTML);
+                ensembleDensity.value = Math.min(density + 0.2, 1.0).toString();
+                break;
+        }
+        // 触发输入事件以更新显示值
+        temperature.dispatchEvent(new Event('input'));
+        topP.dispatchEvent(new Event('input'));
+        frequencyPenalty.dispatchEvent(new Event('input'));
+        ensembleDensity.dispatchEvent(new Event('input'));
+    }
 }
-function midiToEvents(midiFile) {
-    return compoundToEvents(midiToCompound(midiFile));
+async function initTradingFeature(chat, midi_loader) {
+    // 创建trader实例
+    const trader = new MusicTrader(chat, midi_loader);
+    // 设置事件监听器
+    document.getElementById('startTradingButton').addEventListener('click', ()=>{
+        trader.startTradingSession();
+    });
+    document.getElementById('generateAIPartButton').addEventListener('click', async ()=>{
+        await trader.generateAIPart();
+    });
+    document.getElementById('addHumanPartButton').addEventListener('click', ()=>{
+        trader.addHumanPart();
+    });
+    // 修改现有的midiFile更改监听器以配合交易
+    const fileInput = document.getElementById('midiFile');
+    if (fileInput) {
+        const originalChangeListener = fileInput.onchange;
+        fileInput.onchange = async (e)=>{
+            if (e.target === null || e.target.files === null || e.target.files.length === 0) return;
+            if (trader.isTrading && trader.currentTrader === 'human') // 作为交易会话的一部分处理
+            await trader.processHumanMidiUpload(e.target.files[0]);
+            else // 对于非交易场景使用原始功能
+            if (originalChangeListener) originalChangeListener(e);
+        };
+    }
+    // 启用/禁用交易模式切换
+    document.getElementById('enableTrading').addEventListener('change', (e)=>{
+        const isEnabled = e.target.checked;
+        document.getElementById('startTradingButton').disabled = !isEnabled;
+        if (!isEnabled) {
+            trader.isTrading = false;
+            document.getElementById('addHumanPartButton').disabled = true;
+            document.getElementById('generateAIPartButton').disabled = true;
+            document.getElementById('tradingStatus').textContent = 'Trading mode disabled';
+        } else document.getElementById('tradingStatus').textContent = 'Ready to start trading session';
+    });
+    return trader;
 }
 
-},{"./music_transformer_config":"55aRM","./music_transformer_vocab":"2xPTu","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["eqO40","blF1J"], "blF1J", "parcelRequire2edb", "./", "/")
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","@tonejs/midi":"hEB1r","./compound_converter.ts":"4GcM3"}],"iCPQz":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+/**
+ * ClickTrackGenerator - Creates click track patterns as tokens that can be used
+ * to influence the music generation model
+ */ parcelHelpers.export(exports, "ClickTrackGenerator", ()=>ClickTrackGenerator);
+/**
+ * Generate Click Track tokens that can be used as an initial prompt for music generation
+ * This creates a short sequence with just beats to guide the model's timing
+ * @param options Click Track configuration options
+ * @param bars Number of bars to generate
+ * @returns Array of tokens representing the click track
+ */ parcelHelpers.export(exports, "generateClickTrackPrompt", ()=>generateClickTrackPrompt);
+/**
+ * Extend MusicLogitProcessor to incorporate click track biasing
+ * This function adds methods and properties to the music logit processor
+ * to enable click track functionality.
+ * 
+ * Note: This function is meant to be called on the worker side to
+ * modify the musicLogitProcessor directly.
+ */ parcelHelpers.export(exports, "extendMusicLogitProcessor", ()=>extendMusicLogitProcessor);
+/**
+ * Specialized class for visualizing click tracks in the MIDI player
+ * This creates a more visible representation of the click track pattern
+ */ /**
+ * 修复ClickTrackVisualizer类，确保在hide模式下完全移除节拍标记
+ */ parcelHelpers.export(exports, "ClickTrackVisualizer", ()=>ClickTrackVisualizer);
+var _musicTransformerVocab = require("./music_transformer_vocab");
+var _musicTransformerConfig = require("./music_transformer_config");
+var _compoundConverter = require("./compound_converter");
+class ClickTrackGenerator {
+    constructor(options){
+        this._clickTrackEvents = [] // Array of time, duration, note triplets
+        ;
+        this._clickTrackTokens = [] // Flattened array of tokens
+        ;
+        this._clickTrackCompounds = [] // Compound format for MIDI rendering
+        ;
+        this.options = {
+            bpm: 120,
+            timeDivision: 480,
+            pattern: [
+                4,
+                4
+            ],
+            strength: 2.0,
+            accentFirstBeat: true,
+            includeInOutput: true,
+            ...options
+        };
+        this.generateClickTrack();
+    }
+    /**
+   * Generate click track events based on current options
+   * @param barCount Number of bars to generate
+   */ generateClickTrack(barCount = 8) {
+        this._clickTrackEvents = [];
+        this._clickTrackTokens = [];
+        this._clickTrackCompounds = [];
+        // Calculate total ticks per bar
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        // Generate click for each beat across all bars
+        for(let bar = 0; bar < barCount; bar++)for(let beat = 0; beat < beatsPerBar; beat++){
+            const time = bar * ticksPerBar + beat * ticksPerBeat;
+            const duration = ticksPerBeat / 4; // Duration of click (quarter of a beat)
+            // Use percussion instrument for click track (channel 9, program 0)
+            // For first beat use a side stick (37), for other beats use closed hi-hat (42)
+            const isFirstBeat = beat === 0 && this.options.accentFirstBeat;
+            const clickNote = (0, _musicTransformerVocab.NOTE_OFFSET) + 9 * (0, _musicTransformerConfig.MAX_PITCH) + (isFirstBeat ? 37 : 42);
+            // Add event to our internal representation
+            this._clickTrackEvents.push([
+                time,
+                duration,
+                clickNote
+            ]);
+            // Add tokens to flattened array
+            this._clickTrackTokens.push((0, _musicTransformerVocab.TIME_OFFSET) + time);
+            this._clickTrackTokens.push((0, _musicTransformerVocab.DUR_OFFSET) + duration);
+            this._clickTrackTokens.push(clickNote);
+            // Add compounds for MIDI rendering
+            // Format: [time, duration, pitch, instrument, velocity]
+            const velocity = isFirstBeat ? 100 : 80; // Stronger velocity for first beat
+            this._clickTrackCompounds.push([
+                time,
+                duration,
+                isFirstBeat ? 37 : 42,
+                9,
+                velocity
+            ]);
+        }
+    }
+    /**
+   * Get tokens representing the click track
+   */ get tokens() {
+        return this._clickTrackTokens;
+    }
+    /**
+   * Get click track events as [time, duration, note] triplets
+   */ get events() {
+        return this._clickTrackEvents;
+    }
+    /**
+   * Get click track as compound events for direct MIDI rendering
+   */ get compounds() {
+        return this._clickTrackCompounds;
+    }
+    /**
+   * Update click track options
+   */ updateOptions(options) {
+        this.options = {
+            ...this.options,
+            ...options
+        };
+        this.generateClickTrack();
+    }
+    /**
+   * Get current strength setting
+   */ get strength() {
+        return this.options.strength;
+    }
+    /**
+   * Get current BPM
+   */ get bpm() {
+        return this.options.bpm;
+    }
+    /**
+   * Check if click track should be included in output
+   */ get includeInOutput() {
+        return this.options.includeInOutput;
+    }
+    /**
+   * Get the current time signature pattern
+   */ get pattern() {
+        return this.options.pattern;
+    }
+    /**
+   * Calculate ticks per bar based on current options
+   */ getTicksPerBar() {
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        return ticksPerBeat * beatsPerBar;
+    }
+    /**
+   * Calculate time in ticks for a specific bar and beat
+   * @param bar Bar number (0-indexed)
+   * @param beat Beat number (0-indexed)
+   * @returns Time position in ticks
+   */ getTimeForBeatPosition(bar, beat) {
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        return bar * ticksPerBar + beat * ticksPerBeat;
+    }
+    /**
+   * Find the nearest beat position to a given time
+   * Useful for aligning events to the beat grid
+   * @param time Time position in ticks
+   * @returns Nearest beat position in ticks
+   */ findNearestBeatPosition(time) {
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        // Calculate bar and partial beat
+        const bar = Math.floor(time / ticksPerBar);
+        const remainingTicks = time % ticksPerBar;
+        const beat = Math.round(remainingTicks / ticksPerBeat);
+        // Handle case where rounding puts us at the next bar
+        if (beat >= beatsPerBar) return this.getTimeForBeatPosition(bar + 1, 0);
+        return this.getTimeForBeatPosition(bar, beat);
+    }
+    /**
+   * Create a MIDI representation of the click track
+   * @param midiLoader An optional MIDILoader instance to use
+   * @returns A data URI for the MIDI file
+   */ createMIDI(midiLoader) {
+        if (midiLoader) {
+            // Use the provided MIDILoader
+            const tempCompounds = midiLoader.getCompounds();
+            midiLoader.updateFromCompounds([
+                ...tempCompounds,
+                ...this._clickTrackCompounds
+            ]);
+            return midiLoader.getMIDIData();
+        } else // Create a new MIDI directly
+        return _compoundConverter.compoundToMidi(this._clickTrackCompounds);
+    }
+    /**
+   * Check if a given time position is on a beat
+   * @param time Time position in ticks
+   * @returns True if position is exactly on a beat, false otherwise
+   */ isOnBeat(time) {
+        const ticksPerBeat = this.options.timeDivision;
+        return time % ticksPerBeat === 0;
+    }
+    /**
+   * Check if a given time position is on the first beat of a bar
+   * @param time Time position in ticks
+   * @returns True if position is on the first beat of a bar, false otherwise
+   */ isFirstBeatOfBar(time) {
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        return time % ticksPerBar === 0;
+    }
+}
+function generateClickTrackPrompt(options, bars = 2) {
+    const clickGen = new ClickTrackGenerator(options);
+    clickGen.generateClickTrack(bars);
+    return clickGen.tokens;
+}
+function extendMusicLogitProcessor(musicLogitProcessor) {
+    // Add properties
+    musicLogitProcessor.useClickTrack = false;
+    musicLogitProcessor.clickTrackBeats = []; // Array to store beat times for biasing
+    musicLogitProcessor.clickTrackOptions = {
+        bpm: 120,
+        pattern: [
+            4,
+            4
+        ],
+        strength: 3.0,
+        accentFirstBeat: true,
+        timeDivision: 480,
+        includeInOutput: true
+    };
+    // Add methods
+    musicLogitProcessor.enableClickTrack = function(enable) {
+        this.useClickTrack = enable;
+    };
+    musicLogitProcessor.updateClickTrack = function(options) {
+        this.clickTrackOptions = {
+            ...this.clickTrackOptions,
+            ...options
+        };
+        this.updateClickTrackBeats();
+    };
+    musicLogitProcessor.updateClickTrackBeats = function() {
+        // Generate click track beats based on current options
+        const ticksPerBeat = this.clickTrackOptions.timeDivision;
+        const beatsPerBar = this.clickTrackOptions.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        this.clickTrackBeats = [];
+        // Generate times for 8 bars of beats
+        for(let bar = 0; bar < 8; bar++)for(let beat = 0; beat < beatsPerBar; beat++){
+            const time = bar * ticksPerBar + beat * ticksPerBeat;
+            // Store beat position and whether it's a first beat
+            this.clickTrackBeats.push({
+                time: time,
+                isFirstBeat: beat === 0
+            });
+        }
+    };
+    // Store the original processLogits method
+    const originalProcessLogits = musicLogitProcessor.processLogits;
+    // Override processLogits to add click track biasing
+    musicLogitProcessor.processLogits = function(logits) {
+        // Run original logic first
+        logits = originalProcessLogits.call(this, logits);
+        // Apply click track biasing if enabled
+        if (this.useClickTrack) {
+            const curIdx = this.tokenSequence.length;
+            // Only bias time tokens (every 3rd token starting from 0)
+            if (curIdx % 3 === 0) {
+                const curTime = this.curTime;
+                // Find the closest future beat
+                let closestBeat = null;
+                let closestBeatDistance = Infinity;
+                for (const beat of this.clickTrackBeats)if (beat.time >= curTime) {
+                    const distance = beat.time - curTime;
+                    if (distance < closestBeatDistance) {
+                        closestBeatDistance = distance;
+                        closestBeat = beat;
+                    }
+                }
+                // If we found a future beat, boost its probability
+                if (closestBeat) {
+                    const timeToken = (0, _musicTransformerVocab.TIME_OFFSET) + closestBeat.time;
+                    // Apply a boost proportional to how close the time is to the beat
+                    // Use a Gaussian-like falloff for times near the beat
+                    for(let t = (0, _musicTransformerVocab.TIME_OFFSET); t < (0, _musicTransformerVocab.TIME_OFFSET) + (0, _musicTransformerConfig.MAX_DUR); t++){
+                        // Calculate distance from this time to the beat time
+                        const timeDiff = Math.abs(t - timeToken);
+                        // Apply boost with Gaussian falloff
+                        // The closer to the beat, the stronger the boost
+                        if (timeDiff < 100) {
+                            let boost = this.clickTrackOptions.strength * Math.exp(-timeDiff * timeDiff / 100);
+                            // Apply stronger boost for first beats if accentFirstBeat is true
+                            if (closestBeat.isFirstBeat && this.clickTrackOptions.accentFirstBeat) boost *= 1.5; // 50% stronger for first beats
+                            if (boost > 0.1) logits[t] += boost;
+                        }
+                    }
+                }
+            }
+        }
+        return logits;
+    };
+}
+class ClickTrackVisualizer {
+    constructor(midiLoader, options){
+        this.visualMode = 'normal';
+        this.beatMarkers = [] // 存储最近创建的视觉节拍标记
+        ;
+        this.midiLoader = midiLoader;
+        this.options = {
+            bpm: 120,
+            timeDivision: 480,
+            pattern: [
+                4,
+                4
+            ],
+            strength: 3.0,
+            accentFirstBeat: true,
+            includeInOutput: true,
+            ...options
+        };
+    }
+    /**
+             * 设置可视化模式
+             * @param mode 'highlight' 使节拍更明显, 'normal' 正常播放
+             */ setVisualMode(mode) {
+        // 如果从highlight切换到normal模式，需要清理节拍标记
+        if (this.visualMode === 'highlight' && mode === 'normal') this.removeBeatVisualizers();
+        this.visualMode = mode;
+    }
+    /**
+             * 更新可视化选项
+             */ updateOptions(options) {
+        this.options = {
+            ...this.options,
+            ...options
+        };
+        // 如果当前处于高亮模式，则重新生成节拍标记
+        if (this.visualMode === 'highlight') {
+            this.removeBeatVisualizers();
+            const barCount = this.calculateRequiredBars();
+            this.createBeatVisualMarkers(barCount);
+        }
+    }
+    /**
+             * 删除所有视觉节拍标记
+             * 这会从MIDILoader的compounds中移除我们添加的标记
+             */ removeBeatVisualizers() {
+        if (this.beatMarkers.length === 0) return;
+        // 获取当前MIDI数据
+        let compounds = this.midiLoader.getCompounds();
+        // 创建一个Set来快速查找我们的标记
+        const markerSet = new Set();
+        this.beatMarkers.forEach((marker)=>{
+            // 使用时间+音高+乐器作为唯一标识
+            const key = `${marker[0]}-${marker[2]}-${marker[3]}`;
+            markerSet.add(key);
+        });
+        // 过滤掉我们的标记
+        compounds = compounds.filter((compound)=>{
+            if (compound.length < 4) return true;
+            const key = `${compound[0]}-${compound[2]}-${compound[3]}`;
+            return !markerSet.has(key);
+        });
+        // 更新MIDI数据
+        this.midiLoader.updateFromCompounds(compounds);
+        // 清空标记列表
+        this.beatMarkers = [];
+    }
+    /**
+             * 根据当前MIDI数据计算需要的小节数
+             */ calculateRequiredBars() {
+        const compounds = this.midiLoader.getCompounds();
+        if (compounds.length === 0) return 4; // 默认4小节
+        // 找到最大时间
+        let maxTime = 0;
+        compounds.forEach((compound)=>{
+            maxTime = Math.max(maxTime, compound[0]);
+        });
+        // 计算需要的小节数 (加2小节冗余)
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        return Math.ceil(maxTime / ticksPerBar) + 2;
+    }
+    /**
+             * 生成可视化增强的MIDI数据URI
+             * 这会在不影响音频的情况下添加节拍模式的视觉提示
+             */ createVisualization() {
+        // 如果切换到normal模式，移除所有视觉标记
+        if (this.visualMode === 'normal') {
+            this.removeBeatVisualizers();
+            return this.midiLoader.getMIDIData();
+        } else if (this.visualMode === 'highlight') {
+            // 生成新的节拍标记
+            const barCount = this.calculateRequiredBars();
+            this.beatMarkers = this.createBeatVisualMarkers(barCount);
+            // 获取当前MIDI数据
+            const currentCompounds = this.midiLoader.getCompounds();
+            // 合并现有MIDI和节拍标记
+            // 重要: 创建一个新数组而不是修改原数组
+            const combinedCompounds = [
+                ...currentCompounds
+            ];
+            // 添加节拍标记，避免重复
+            this.beatMarkers.forEach((marker)=>{
+                // 检查此确切位置是否已存在标记
+                const exists = combinedCompounds.some((event)=>event[0] === marker[0] && // 相同时间
+                    event[2] === marker[2] && // 相同音高
+                    event[3] === marker[3] // 相同乐器
+                );
+                if (!exists) combinedCompounds.push(marker);
+            });
+            // 按时间排序
+            combinedCompounds.sort((a, b)=>a[0] - b[0]);
+            // 更新MIDI数据
+            this.midiLoader.updateFromCompounds(combinedCompounds);
+            return this.midiLoader.getMIDIData();
+        }
+        // 如果没有应用可视化模式，只返回当前MIDI
+        return this.midiLoader.getMIDIData();
+    }
+    /**
+             * 创建节拍模式的视觉标记
+             * 这些是高力度的打击乐音符，使模式可见
+             * 但不影响生成的音乐
+             */ createBeatVisualMarkers(barCount) {
+        const markers = [];
+        // 计算时间信息
+        const ticksPerBeat = this.options.timeDivision;
+        const beatsPerBar = this.options.pattern[0];
+        const ticksPerBar = ticksPerBeat * beatsPerBar;
+        // 为每个节拍生成标记
+        for(let bar = 0; bar < barCount; bar++)for(let beat = 0; beat < beatsPerBar; beat++){
+            const time = bar * ticksPerBar + beat * ticksPerBeat;
+            const duration = ticksPerBeat / 4; // 短持续时间
+            // 对于小节的第一拍，使用不同的视觉指示器
+            const isFirstBeat = beat === 0;
+            // 计算视觉标记的乐器和音高
+            // 使用打击乐通道(9)，不同节拍使用不同的声音
+            const instrument = 9; // 打击乐通道
+            // 使用不同打击乐音色使模式可见
+            // 边棒(37)用于第一拍，闭合高帽(42)用于其他拍子
+            const pitch = isFirstBeat ? 37 : 42;
+            // 使用更高的力度以增强视觉效果(不影响生成)
+            const velocity = isFirstBeat ? 100 : 80;
+            markers.push([
+                time,
+                duration,
+                pitch,
+                instrument,
+                velocity
+            ]);
+        }
+        return markers;
+    }
+    /**
+             * 切换播放器中节拍模式的视觉高亮
+             */ toggleBeatVisualization() {
+        this.visualMode = this.visualMode === 'normal' ? 'highlight' : 'normal';
+    }
+}
+
+},{"./music_transformer_vocab":"2xPTu","./music_transformer_config":"55aRM","./compound_converter":"4GcM3","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["eqO40","blF1J"], "blF1J", "parcelRequire2edb", "./", "/")
 
 //# sourceMappingURL=music_player.d957d2f6.js.map
