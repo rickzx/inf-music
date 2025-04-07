@@ -662,7 +662,32 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 }
 
 },{}],"blF1J":[function(require,module,exports,__globalThis) {
+
+
+// Monkey patch for WebGPU API before importing web-llm
+// Serve the chat workload through web worker
+var _webLlm = require("@mlc-ai/web-llm");
+var _musicLogitProcessor = require("./music_logit_processor");
+var _musicTransformerGenerate = require("./music_transformer_generate");
+if (navigator.gpu) {
+    const originalRequestAdapter = navigator.gpu.requestAdapter;
+    navigator.gpu.requestAdapter = async function(...args) {
+        const adapter = await originalRequestAdapter.apply(this, args);
+        if (adapter && !adapter.requestAdapterInfo) // Add missing requestAdapterInfo method
+        adapter.requestAdapterInfo = async function() {
+            return {
+                vendor: "unknown",
+                architecture: "unknown",
+                device: "unknown",
+                description: "Completed"
+            };
+        };
+        return adapter;
+    };
+}
 /* Doc for Music Player: https://magenta.github.io/magenta-js/music */ // import * as midis from './asset/*.mid';
+
+
 var _coreJs = require("@magenta/music/esm/core.js");
 var _mid = require("url:./assets/*.mid");
 var _musicTransformerTs = require("./music_transformer.ts");
