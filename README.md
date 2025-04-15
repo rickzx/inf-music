@@ -1,6 +1,6 @@
 # Infinite Music Player webpage
 
-[demo](https://stoneyey.github.io/Inf-test.github.io/)
+[demo](https://rickzx.github.io/inf-music/)
 
 
 # To run the web-app locally
