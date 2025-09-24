@@ -128,7 +128,109 @@ async function loadMidiTokens(file: Blob) {
   return tokens;
 }
 
+// WebGPU Monkey Patch for graceful error handling
+let webgpuAvailable = null;
+let webgpuErrorMessage = '';
+
+function setupWebGPUMonkeyPatch() {
+  // Patch navigator.gpu if it doesn't exist
+  if (!('gpu' in navigator)) {
+    webgpuAvailable = false;
+    webgpuErrorMessage = 'WebGPU not supported. Please use Chrome 113+, Edge 113+, or Safari 18+.';
+    return;
+  }
+
+  // Patch WebGPU methods to catch initialization errors
+  const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+  navigator.gpu.requestAdapter = async function(...args) {
+    try {
+      const adapter = await originalRequestAdapter(...args);
+      if (!adapter) {
+        webgpuAvailable = false;
+        webgpuErrorMessage = 'WebGPU adapter not available. Your GPU may not be supported.';
+        throw new Error(webgpuErrorMessage);
+      }
+      webgpuAvailable = true;
+      return adapter;
+    } catch (error) {
+      webgpuAvailable = false;
+      webgpuErrorMessage = `WebGPU initialization failed: ${error.message}`;
+      throw error;
+    }
+  };
+
+  // Patch window errors to catch WebGPU-related errors
+  const originalOnError = window.onerror;
+  window.onerror = function(message, source, lineno, colno, error) {
+    if (typeof message === 'string' &&
+        (message.includes('Cannot find WebGPU') ||
+         message.includes('WebGPU') ||
+         message.includes('gpu'))) {
+      webgpuAvailable = false;
+      webgpuErrorMessage = 'WebGPU error detected. Please check browser compatibility.';
+      handleWebGPUError();
+      return true; // Prevent default error handling
+    }
+
+    if (originalOnError) {
+      return originalOnError(message, source, lineno, colno, error);
+    }
+    return false;
+  };
+
+  // Patch unhandled promise rejections
+  window.addEventListener('unhandledrejection', function(event) {
+    const error = event.reason;
+    if (error && error.message &&
+        (error.message.includes('Cannot find WebGPU') ||
+         error.message.includes('WebGPU'))) {
+      webgpuAvailable = false;
+      webgpuErrorMessage = error.message;
+      handleWebGPUError();
+      event.preventDefault(); // Prevent unhandled rejection error
+    }
+  });
+}
+
+function handleWebGPUError() {
+  const initLabel = document.getElementById("init-label");
+  if (initLabel) {
+    initLabel.innerHTML = `⚠️ ${webgpuErrorMessage}<br>Music generation requires WebGPU support for AI inference.`;
+    initLabel.style.color = "#ff6b6b";
+  }
+
+  // Disable all generator buttons but keep player working
+  const startButton = document.getElementById("startButton");
+  const pauseButton = document.getElementById("pauseButton");
+  const resetButton = document.getElementById("resetButton");
+  const reloadButton = document.getElementById("reloadButton");
+
+  if (startButton) startButton.disabled = true;
+  if (pauseButton) pauseButton.disabled = true;
+  if (resetButton) resetButton.disabled = true;
+  if (reloadButton) reloadButton.disabled = true;
+
+  log(`WebGPU Error: ${webgpuErrorMessage}<br>`);
+  log("Music playback still available, but AI generation is disabled.<br>");
+}
+
+function checkWebGPUSupport(): boolean {
+  if (webgpuAvailable !== null) {
+    return webgpuAvailable;
+  }
+  return 'gpu' in navigator;
+}
+
 async function main() {
+  // Setup WebGPU monkey patch first
+  setupWebGPUMonkeyPatch();
+
+  // Early check for WebGPU
+  if (!checkWebGPUSupport() && webgpuAvailable === false) {
+    handleWebGPUError();
+    return;
+  }
+
   // Disable buttons before Web-LLM is fully loaded
   let chat: mt.CustomChatWorkerClient;
 
@@ -277,7 +379,19 @@ async function main() {
   });
 
   /*************************** Init Web-LLM Chat and MIDI visualizer ********************************/
-  chat = await mt.initChat(model_id);
+  try {
+    chat = await mt.initChat(model_id);
+  } catch (error) {
+    console.error('WebLLM initialization failed:', error);
+    if (error.message && error.message.includes('WebGPU')) {
+      webgpuAvailable = false;
+      webgpuErrorMessage = error.message;
+      handleWebGPUError();
+      return;
+    }
+    // Re-throw non-WebGPU errors
+    throw error;
+  }
 
   enableAllButtons();
 
